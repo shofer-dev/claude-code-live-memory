@@ -24,20 +24,21 @@ PIP_INDEX_URL=https://pypi.org/simple/ pip install -e ".[dev]"
 
 ## 0b. Pre-push gate (blocks a bad push)
 
-Mirroring `extensions/shofer-router`, the full suite gates `git push`. `run-tests.sh`
-runs `mypy --strict` + the whole `pytest` suite (bootstrapping the venv's dev deps
-if needed) and exits non-zero on any failure:
+The full suite gates `git push`. `run-tests.sh` runs `mypy --strict` + the whole
+`pytest` suite (bootstrapping the venv's dev deps if needed) and exits non-zero
+on any failure:
 
 ```bash
 ./run-tests.sh                       # run the gate by hand
-./git-hooks/install.sh               # install the pre-push hook (once per clone)
+./git-hooks/install.sh               # activate the pre-push hook (once per clone)
 ```
 
-`git-hooks/install.sh` copies `git-hooks/pre-push` into the monorepo's
-`.git/hooks/`. On `git push`, if the push includes changes under
-`claude-code/live-memory/`, the hook runs `run-tests.sh` and **blocks the push if
-anything fails**; pushes that don't touch live-memory are unaffected. Re-run
-`install.sh` after editing the committed hook (it copies, not symlinks).
+`install.sh` sets `core.hooksPath=git-hooks` (Husky-style), so `git push` runs
+`git-hooks/pre-push` → `./run-tests.sh` and **blocks the push if anything fails**.
+It's scoped to this repo's own git config, so it's safe when this repo is used as
+a **git submodule** — it gates the submodule's own pushes and never touches the
+parent monorepo's hooks. Editing `git-hooks/pre-push` takes effect immediately
+(no reinstall needed).
 
 ## 1. Automated checks (seconds, no network)
 

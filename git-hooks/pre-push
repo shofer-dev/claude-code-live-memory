@@ -1,23 +1,10 @@
 #!/usr/bin/env bash
-# Pre-push gate for the arkware.ai monorepo: when a push includes changes under
-# claude-code/live-memory/, run its test gate and BLOCK the push on any failure.
-# Pushes that don't touch live-memory are unaffected. Install with git-hooks/install.sh.
+# Pre-push gate for the claude-code-live-memory repo: run the full test suite and
+# BLOCK the push on any failure. Layout-agnostic — works in a direct clone or as a
+# git submodule (it `cd`s to this repo's own top-level, never the parent's).
+# Activate once with ./git-hooks/install.sh.
 set -euo pipefail
 
-GATE="claude-code/live-memory/run-tests.sh"
-ZERO="0000000000000000000000000000000000000000"
-touched=0
-
-# pre-push feeds "<localref> <localoid> <remoteref> <remoteoid>" lines on stdin.
-while read -r _localref localoid _remoteref remoteoid; do
-    [ "$localoid" = "$ZERO" ] && continue  # branch deletion — nothing to test
-    if [ "$remoteoid" = "$ZERO" ]; then
-        touched=1                          # new branch on remote — run, to be safe
-    elif git diff --name-only "$remoteoid".."$localoid" | grep -q '^claude-code/live-memory/'; then
-        touched=1
-    fi
-done
-
-[ "$touched" = 1 ] || exit 0
-echo "[pre-push] Live Memory changes detected — running test gate ($GATE)"
-exec "./$GATE"
+cd "$(git rev-parse --show-toplevel)"
+echo "[pre-push] Live Memory test gate → ./run-tests.sh"
+exec ./run-tests.sh
