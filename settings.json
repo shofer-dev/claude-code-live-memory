@@ -1,0 +1,7 @@
+{
+  "$comment": "Optional defaults shipped with the plugin. The server reads its real config from the environment (see server/live_memory/config.py); these are conveniences surfaced to the user.",
+  "env": {
+    "LIVE_MEMORY_URL": "http://127.0.0.1:7711",
+    "LIVE_MEMORY_DEFAULT_TIMEOUT_S": "90"
+  }
+}

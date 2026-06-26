@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "live-memory": {
+      "type": "http",
+      "url": "http://127.0.0.1:7711/mcp",
+      "timeout": 600000
+    }
+  }
+}

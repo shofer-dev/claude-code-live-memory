@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+*.egg-info/
+.venv/
+build/
+dist/
+# runtime state (lives in the data dir, but guard against in-tree runs)
+config.json
+oauth_state.json
+*.tmp

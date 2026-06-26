@@ -1,0 +1,33 @@
+# Live Memory — systemd unit (reference/template).
+#
+# install-service.sh generates the REAL unit with absolute paths filled in
+# (@PYTHON@ = the venv interpreter, @ENVFILE@ = your env file). This file is the
+# documented shape; you can also adapt it by hand.
+#
+# Subscription (zero-config) auth needs the service to read your
+# ~/.claude/.credentials.json, so it must run AS YOU with HOME set:
+#   • user service  (systemctl --user)  → runs as you, HOME is automatic. Best.
+#   • system service (this file)         → add User=/HOME below (shown).
+
+[Unit]
+Description=Live Memory — persistent, read-only codebase Q&A MCP server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=@PYTHON@ -m live_memory
+EnvironmentFile=-@ENVFILE@
+Environment=PYTHONUNBUFFERED=1
+
+# For a SYSTEM service using subscription auth, uncomment and set these so the
+# server can find your Claude credentials (a user service needs neither):
+#User=youruser
+#Environment=HOME=/home/youruser
+
+Restart=on-failure
+RestartSec=3
+# The HTTP MCP server is long-lived; nothing to spawn, just keep it up.
+
+[Install]
+WantedBy=default.target
