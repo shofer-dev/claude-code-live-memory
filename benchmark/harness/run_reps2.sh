@@ -8,7 +8,8 @@
 # NOTE: claude -p exposes no temperature/seed flag, so sampling can't be pinned (lever #2
 #       is infeasible); we rely on the mechanism metric + per-turn + replicates instead.
 set -uo pipefail
-WT=/tmp/pilot/shofer; RUNS=/tmp/pilot/reps2; K=${1:-4}
+WT=/tmp/pilot/shofer; RUNS=${RUNS:-/tmp/pilot/batch}; K=${1:-4}
+HANG_GUARD=${HANG_GUARD:-2700}   # per-run net (s) — only catches genuine hangs (~3x normal); 0 disables
 HERE="$(cd "$(dirname "$0")" && pwd)"; AN="$HERE/analyze.py"
 MODEL=claude-sonnet-4-6
 LMCFG='{"mcpServers":{"live-memory":{"type":"http","url":"http://127.0.0.1:7711/mcp"}}}'
@@ -20,7 +21,8 @@ reset(){ git -C "$WT" checkout -- . >/dev/null 2>&1; git -C "$WT" clean -fd >/de
 st(){ curl -s "http://127.0.0.1:7711/stats?cwd=$WT"|python3 -c "import json,sys;d=json.load(sys.stdin);print(d['inputTokens'],d['outputTokens'],d['cacheReadTokens'],d['cacheWriteTokens'],d['invocations'])"; }
 ok(){ ( cd "$WT/src"; pnpm check-types >/dev/null 2>&1 && pnpm vitest run list-files >/dev/null 2>&1 && [ -n "$(git -C "$WT" status --porcelain)" ] && grep -q count_lines "$WT/packages/types/src/tool.ts" && echo yes||echo NO ); }
 # BOTH arms: --strict-mcp-config. without: no --mcp-config -> zero LM. with: only ours.
-feat(){ ( cd "$WT" && claude -p "$P" --model "$MODEL" --append-system-prompt "$SYS" --strict-mcp-config \
+TO(){ [ "$HANG_GUARD" -gt 0 ] && echo "timeout $HANG_GUARD" || echo ""; }
+feat(){ ( cd "$WT" && $(TO) claude -p "$P" --model "$MODEL" --append-system-prompt "$SYS" --strict-mcp-config \
     --dangerously-skip-permissions --max-turns 200 --output-format stream-json --verbose $2 ) >"$1" 2>/dev/null; }
 row(){ python3 -c "import json,sys;d=json.loads(open('$1.json').read());print('$2,$3,'+','.join(str(d[k]) for k in ['turns','read_calls','read_tok','lm_calls','lm_tok','edit_calls','pin','pout','pcr','pcw','status','api_fail']))"; }
 
