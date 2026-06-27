@@ -172,6 +172,12 @@ class WorkspaceState:
             "lastTouchAt": int(self.last_touch_at) or None,  # cache last refreshed (query or warm), epoch s
             "queueDepth": self.queue.depth,
             "costUsd": round(self.cost.usd, 6),
+            # cumulative cheap-model token usage (accumulates even under subscription,
+            # where costUsd is null) — for benchmarking total/by-type token spend.
+            "inputTokens": self.cost.input_tokens,
+            "outputTokens": self.cost.output_tokens,
+            "cacheReadTokens": self.cost.cache_read_tokens,
+            "cacheWriteTokens": self.cost.cache_write_tokens,
         }
 
 

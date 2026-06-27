@@ -155,7 +155,8 @@ def build_server(cfg: Config | None = None) -> FastMCP:
                     "contextWindow": {"usedTokens": 0, "maxTokens": c.max_context_tokens, "fillPct": 0.0,
                                       "qaMessages": 0, "fileContexts": 0, "staleFileContexts": 0},
                     "lastCompaction": None, "summariesWritten": 0, "questionsAnswered": 0,
-                    "keepWarms": 0, "lastTouchAt": None, "queueDepth": 0, "costUsd": 0.0}
+                    "keepWarms": 0, "lastTouchAt": None, "queueDepth": 0, "costUsd": 0.0,
+                    "inputTokens": 0, "outputTokens": 0, "cacheReadTokens": 0, "cacheWriteTokens": 0}
         else:
             base = ws.stats()
             base["uptimeSeconds"] = int(time.time() - _START)

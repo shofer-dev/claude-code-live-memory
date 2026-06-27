@@ -103,6 +103,16 @@ async def test_metadata_zero_when_no_tools(tmp_cfg):
     assert r.tool_calls == 0 and r.files_read == 0
 
 
+def test_stats_exposes_token_breakdown(tmp_cfg):
+    # cumulative input/output tokens surface in /stats (needed for benchmarking,
+    # and they accumulate even under subscription where costUsd is null/zeroed).
+    ws = make_ws(tmp_cfg, FakeLlm())
+    ws.cost.add(CostSnapshot(usd=0.01, input_tokens=100, output_tokens=20, cache_read_tokens=50))
+    s = ws.stats()
+    assert s["inputTokens"] == 100 and s["outputTokens"] == 20
+    assert s["cacheReadTokens"] == 50 and s["cacheWriteTokens"] == 0
+
+
 @pytest.mark.asyncio
 async def test_registry_clear_and_clear_all(tmp_cfg, tmp_path):
     from live_memory.workspace import WorkspaceRegistry
