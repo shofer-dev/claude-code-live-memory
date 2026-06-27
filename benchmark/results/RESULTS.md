@@ -22,6 +22,40 @@ returns `NONE`); with-arm gets only our wired instance. The corrected, instrumen
 harness is `harness/run_reps2.sh` (+ `harness/analyze.py`); results land in
 `results/reps2/`.
 
+## DEFINITIVE single-feature result (K=20, isolated, P=4 parallel)
+
+20 reps/arm, 40/40 valid, 0 invalid, 0 API failures (`results/parallel/`).
+
+| metric | without (n=20) | with (n=20) | Δ |
+|---|---|---|---|
+| **read_tok** (codebase) | 41,208 ± 12,344 | 14,446 ± 6,694 | **−65%** |
+| edit_calls | 12 | 12 | **0** |
+| turns | 38 ± 9 | 40 ± 8 | +5% |
+| **premium $** (Sonnet) | 0.703 ± 0.296 | 0.713 ± 0.221 | **+1.4%** |
+| cheap $ (warm-up+feature, Haiku) | — | 0.235 ± 0.092 | — |
+
+**Conclusion: on an edit-bound single feature, Live Memory offloads reading (−65%,
+clean) but does NOT reduce premium tokens (break-even, +1.4% = noise in ±0.3 CV).**
+Three consequences, each proven with the data:
+
+1. **The reading offload doesn't reach the premium budget.** Read file content is
+   <2% of the premium footprint (dominated by conversation/edits/system/tool-defs
+   re-read every turn as cache-reads). Offloading it is invisible in total-$.
+2. **Cost is invariant to the building model's price.** Per-token footprints are
+   equal (with even +4%), so repricing both arms at Opus rates gives the *same*
+   +3% — a pricier model can't widen a gap that doesn't exist at the token level.
+3. **A free/local cheap model only reaches break-even, not a win.** The bottleneck
+   is the premium side (flat), not the cheap-model cost.
+
+**Why "reads less" ≠ "fewer premium tokens":** turns are driven by the **edit loop**
+(12 edits → ~38–40 edit-check-iterate turns), which the feature fixes; reads batch
+*into* turns rather than driving them. Live Memory makes *understanding* cheaper but
+leaves *execution* untouched, and this feature is execution-bound. The intuition
+("good answer → builder finishes faster") only chains through when the task is
+**understanding-bound** (many search/read turns, few edits) — `count_lines` is the
+opposite. **Next experiments that can show a premium win: (a) an understanding-heavy
+feature; (b) the sequence (hot memory → fewer turns via accumulation).**
+
 ## 1. Live Memory prefix-cache fix (verified, landed)
 
 The cheap-model cost of every query was dominated by the **directory tree** (~30k

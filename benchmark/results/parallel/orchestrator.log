@@ -1,0 +1,41 @@
+=== setup 4 worktrees (sequential) ===
+  /tmp/pilot/pwt1 ready
+  /tmp/pilot/pwt2 ready
+  /tmp/pilot/pwt3 ready
+  /tmp/pilot/pwt4 ready
+=== launch 4 workers x 20 reps ===
+[w2] rep 2 done
+[w3] rep 3 done
+[w1] rep 1 done
+[w4] rep 4 done
+[w3] rep 7 done
+[w1] rep 5 done
+[w2] rep 6 done
+[w4] rep 8 done
+[w2] rep 10 done
+[w3] rep 11 done
+[w4] rep 12 done
+[w1] rep 9 done
+[w3] rep 15 done
+[w2] rep 14 done
+[w4] rep 16 done
+[w1] rep 13 done
+[w3] rep 19 done
+[w2] rep 18 done
+[w4] rep 20 done
+[w1] rep 17 done
+=== AGGREGATE (valid only) ===
+
+without (n=20)
+  read_tok (mechanism): 4.121e+04 ± 1.2e+04
+  turns               : 38.15 ± 9
+  premium $           : 0.7031 ± 0.3
+
+with (n=20)
+  read_tok (mechanism): 1.445e+04 ± 6.7e+03
+  turns               : 40.35 ± 8.2
+  premium $           : 0.7126 ± 0.22
+  cheap $ (wu+feat)   : 0.2347 ± 0.092
+
+invalid: 0/40
+DONE
