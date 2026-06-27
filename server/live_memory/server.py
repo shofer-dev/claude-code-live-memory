@@ -189,6 +189,20 @@ def build_server(cfg: Config | None = None) -> FastMCP:
                 applied += 1
         return JSONResponse({"ok": True, "applied": applied})
 
+    @mcp.custom_route("/clear", methods=["POST"])
+    async def clear(req: Request) -> JSONResponse:
+        """Empty the Live Memory: `{"all": true}` wipes every workspace; otherwise
+        `{"cwd": ...}` wipes that one. Backs /live-memory-empty — a clean slate."""
+        try:
+            body = await req.json()
+        except Exception:  # noqa: BLE001
+            body = {}
+        if body.get("all"):
+            return JSONResponse({"ok": True, "scope": "all", "cleared": registry.clear_all()})
+        cwd = body.get("cwd") or os.getcwd()
+        cleared = registry.clear(cwd)
+        return JSONResponse({"ok": True, "scope": "workspace", "cwd": cwd, "cleared": int(cleared)})
+
     @mcp.custom_route("/reload", methods=["POST"])
     async def reload(_req: Request) -> JSONResponse:
         """Re-read config (env + config.json) and hot-swap the model/provider."""

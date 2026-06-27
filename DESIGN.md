@@ -219,7 +219,7 @@ Both file-change paths are thus scoped to **files Live Memory has actually read*
 
 | Module | Responsibility |
 |--------|----------------|
-| `server.py` | MCP (HTTP) server exposing `ask_live_memory` (+ optional `ask_live_memory_submit`/`_result`); plus `/health`, `/stats`, `/notify`, `/reload` routes; lazily starts the keep-warm loop. Idempotent singleton. |
+| `server.py` | MCP (HTTP) server exposing `ask_live_memory` (+ optional `ask_live_memory_submit`/`_result`); plus `/health`, `/stats`, `/notify`, `/reload`, `/clear` routes; lazily starts the keep-warm loop. Idempotent singleton. |
 | `workspace.py` | Per-`cwd` state registry: each workspace owns its own window, queue, and store. |
 | `manager.py` | The agent loop — process one question against Window B (the 25-iteration tool loop, deadline-bounded). |
 | `context_window.py` | Token budget; file-context LRU eviction (sync) + delegated Q&A summarization. |

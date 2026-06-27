@@ -204,6 +204,35 @@ class WorkspaceRegistry:
     def all(self) -> list[WorkspaceState]:
         return list(self._states.values())
 
+    def clear(self, cwd: str) -> bool:
+        """Forget ONE workspace: drop its in-memory state and delete its on-disk
+        snapshot, so the next query starts from a blank slate. Returns whether
+        anything existed (loaded state or a snapshot file)."""
+        key = self._key(cwd)
+        had_state = self._states.pop(key, None) is not None
+        snap = self.cfg.snapshot_path(key)
+        had_snap = snap.exists()
+        try:
+            snap.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return had_state or had_snap
+
+    def clear_all(self) -> int:
+        """Forget EVERY workspace: drop all in-memory state + delete all snapshot
+        files (the 16-hex `<hash>.json`; config.json/oauth_state.json are kept).
+        Returns the number of snapshots deleted."""
+        self._states.clear()
+        n = 0
+        for f in self.cfg.data_dir.glob("*.json"):
+            if len(f.stem) == 16 and all(c in "0123456789abcdef" for c in f.stem):
+                try:
+                    f.unlink()
+                    n += 1
+                except OSError:
+                    pass
+        return n
+
     def reload(self, cfg: Config, llm: LlmClient, summarizer: Summarizer) -> None:
         """Adopt a new config + clients: future workspaces use them, and every
         existing workspace hot-swaps (state preserved)."""

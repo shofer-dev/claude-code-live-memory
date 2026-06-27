@@ -104,6 +104,26 @@ async def test_metadata_zero_when_no_tools(tmp_cfg):
 
 
 @pytest.mark.asyncio
+async def test_registry_clear_and_clear_all(tmp_cfg, tmp_path):
+    from live_memory.workspace import WorkspaceRegistry
+    repo = tmp_path / "proj"
+    (repo / ".git").mkdir(parents=True)
+    reg = WorkspaceRegistry(tmp_cfg, FakeLlm(), Summarizer(FakeLlm()))
+    ws = await reg.get(str(repo))
+    await ws.persist()                                  # write its snapshot
+    snap = tmp_cfg.snapshot_path(ws.cwd)
+    assert snap.exists() and reg.existing(str(repo)) is not None
+    # clear ONE workspace → state dropped + snapshot deleted
+    assert reg.clear(str(repo)) is True
+    assert not snap.exists() and reg.existing(str(repo)) is None
+    assert reg.clear(str(repo)) is False               # nothing left
+    # recreate a snapshot, then clear_all wipes everything
+    await (await reg.get(str(repo))).persist()
+    assert snap.exists()
+    assert reg.clear_all() >= 1 and not snap.exists() and reg.all() == []
+
+
+@pytest.mark.asyncio
 async def test_registry_canonicalizes_subdir_to_repo_root(tmp_cfg, tmp_path):
     from live_memory.workspace import WorkspaceRegistry
     repo = tmp_path / "proj"

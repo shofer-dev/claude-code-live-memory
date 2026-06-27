@@ -21,8 +21,8 @@ live-memory/
 ├── commands/                      # USER-facing slash commands (not agent tools)
 │   ├── live-memory-stats.md       # /live-memory-stats  → GET /stats
 │   ├── live-memory-config.md      # /live-memory-config → set model/provider, hot-reload
-│   ├── stats.py
-│   └── config.py
+│   ├── live-memory-empty.md       # /live-memory-empty  → wipe memory (this workspace or `all`)
+│   ├── stats.py · config.py · empty.py
 ├── settings.json
 ├── deploy/                        # systemd unit + env example + install-service.sh
 └── server/                        # the long-running MCP server (Python, asyncio)
