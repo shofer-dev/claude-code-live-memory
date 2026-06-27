@@ -29,12 +29,11 @@ Your purpose is to maintain long-term knowledge about a codebase and answer ques
 - If you don't know something after exploring with tools, say so rather than guessing.
 - If a question requires knowledge you cannot acquire with your read-only tool set, say so clearly.
 
-## Accumulated knowledge (durable facts distilled from earlier questions)
-{knowledge_ledger}
-
 {directory_tree}
 
-.gitignore patterns are respected — excluded files are never loaded into your context."""
+.gitignore patterns are respected — excluded files are never loaded into your context.
+
+(Your Accumulated knowledge ledger and the manifest of files you've already read follow below, after this section.)"""
 
 
 def empty_ledger_text() -> str:

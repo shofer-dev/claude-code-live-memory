@@ -190,10 +190,24 @@ def test_manifest_distinguishes_read_changed_deleted(tmp_cfg):
     assert ws.invalidate("changed.py") is True       # FileChanged 'change' → stale
     assert ws.mark_deleted("gone.py") is True          # FileChanged 'unlink' → deleted
     assert ws.mark_deleted("never_read.py") is False   # only files we actually read
-    sp = _build_system(ws, w)
-    assert "Read into your knowledge: read.py" in sp
-    assert "changed.py — CHANGED since you read it" in sp
-    assert "gone.py — DELETED or moved/renamed" in sp
+    stable, volatile = _build_system(ws, w)
+    assert "{directory_tree}" not in stable          # tree interpolated into the cached prefix
+    assert "Read into your knowledge: read.py" in volatile   # manifest lives in the volatile (uncached) block
+    assert "changed.py — CHANGED since you read it" in volatile
+    assert "gone.py — DELETED or moved/renamed" in volatile
+
+
+def test_stable_prefix_constant_across_ledger_and_manifest_changes(tmp_cfg):
+    # The cached stable prefix must NOT change when the ledger/manifest change —
+    # otherwise the (expensive) directory-tree cache busts on every question.
+    from live_memory.manager import _build_system
+    ws = make_ws(tmp_cfg, FakeLlm())
+    stable0, _ = _build_system(ws, ws.window)
+    ws.window.knowledge_ledger = "new durable facts learned since"
+    ws.window.upsert_file_context(FileContext("x.py", "h", token_estimate=5))
+    stable1, volatile1 = _build_system(ws, ws.window)
+    assert stable0 == stable1                                  # prefix stable → cache survives
+    assert "new durable facts learned since" in volatile1      # the change went to the volatile block
 
 
 @pytest.mark.asyncio
@@ -266,7 +280,7 @@ async def test_parallel_fork_join_keeps_most_exploring_end_to_end(tmp_cfg):
         def __init__(self) -> None:
             self.chat_calls = 0
 
-        async def chat(self, system, messages, tools=None, max_tokens=4096):
+        async def chat(self, system, messages, tools=None, max_tokens=4096, system_volatile=""):
             self.chat_calls += 1
             await asyncio.sleep(0.005)  # yield so both questions fork from the same base
             blob = _json.dumps(messages)
@@ -301,7 +315,7 @@ async def test_parallel_cumulative_cost_sums_all_forks(tmp_cfg):
     tmp_cfg.metered = True  # so $ isn't zeroed
 
     class CostLlm:
-        async def chat(self, system, messages, tools=None, max_tokens=4096):
+        async def chat(self, system, messages, tools=None, max_tokens=4096, system_volatile=""):
             await asyncio.sleep(0.005)  # interleave: both fork from the same base
             a = "qA" in _json.dumps(messages)
             return ChatResult(answer="A" if a else "B", cost=CostSnapshot(usd=0.01 if a else 0.02))

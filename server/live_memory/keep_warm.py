@@ -17,6 +17,7 @@ import time
 from typing import TYPE_CHECKING
 
 from .manager import _build_system, _history_to_messages
+from .tool_executor import TOOL_SCHEMAS
 
 if TYPE_CHECKING:
     from .config import Config
@@ -40,10 +41,12 @@ def _eligible(ws: "WorkspaceState", now: float, interval: float, max_idle: float
 
 async def warm_one(ws: "WorkspaceState", now: float) -> None:
     """Send the workspace's current prefix with a 1-token completion; discard it."""
-    system = _build_system(ws, ws.window)
+    # Warm the SAME cached prefix real queries use: identical stable system + tools
+    # (tools are part of the cache key), so the breakpoint stays hot across idle gaps.
+    system_stable, system_volatile = _build_system(ws, ws.window)
     conversation = _history_to_messages(ws.window.messages)
     conversation.append({"role": "user", "content": "(keep-warm ping — reply with a single token)"})
-    result = await ws.llm.chat(system, conversation, tools=None, max_tokens=1)
+    result = await ws.llm.chat(system_stable, conversation, tools=TOOL_SCHEMAS, max_tokens=1, system_volatile=system_volatile)
     ws.add_cost(result.cost)          # the warm read is real (cheap) spend
     ws.last_touch_at = now
     ws.keep_warms += 1

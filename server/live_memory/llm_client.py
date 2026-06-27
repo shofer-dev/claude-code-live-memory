@@ -27,7 +27,7 @@ OAUTH_BETA = "oauth-2025-04-20"
 
 class LlmClient(Protocol):
     async def chat(self, system_prompt: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None,
-                   max_tokens: int = 4096) -> ChatResult: ...
+                   max_tokens: int = 4096, system_volatile: str = "") -> ChatResult: ...
     async def complete(self, system_prompt: str, user_text: str, max_tokens: int = 2048) -> tuple[str, CostSnapshot]: ...
 
 
@@ -61,9 +61,15 @@ class AnthropicClient:
         return self._client
 
     async def chat(self, system_prompt: str, messages: list[dict[str, Any]],
-                   tools: list[dict[str, Any]] | None = None, max_tokens: int = 4096) -> ChatResult:
+                   tools: list[dict[str, Any]] | None = None, max_tokens: int = 4096,
+                   system_volatile: str = "") -> ChatResult:
         client = await self._ac()
+        # Cache breakpoint on the STABLE prefix (instructions + directory tree + tools)
+        # so it is written once and read cross-question. The VOLATILE block (ledger +
+        # file manifest) follows the breakpoint uncached, so it never busts the prefix.
         system = [_with_cache({"type": "text", "text": system_prompt})]
+        if system_volatile:
+            system.append({"type": "text", "text": system_volatile})
         msgs = [dict(m) for m in messages]
         if len(msgs) >= 2:  # cache the stable history tail (breakpoint 3)
             tail = msgs[-2]
@@ -171,10 +177,12 @@ class OpenAIClient:
                                      cache_read_tokens=cached)
 
     async def chat(self, system_prompt: str, messages: list[dict[str, Any]],
-                   tools: list[dict[str, Any]] | None = None, max_tokens: int = 4096) -> ChatResult:
+                   tools: list[dict[str, Any]] | None = None, max_tokens: int = 4096,
+                   system_volatile: str = "") -> ChatResult:
+        full_system = f"{system_prompt}\n\n{system_volatile}" if system_volatile else system_prompt
         payload: dict[str, Any] = {
             "model": self.cfg.model,
-            "messages": _anthropic_msgs_to_openai(system_prompt, messages),
+            "messages": _anthropic_msgs_to_openai(full_system, messages),
             "max_tokens": max_tokens,
         }
         ot = _tools_to_openai(tools)

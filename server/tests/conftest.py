@@ -28,7 +28,7 @@ class FakeLlm:
         self.chat_calls = 0
         self.complete_calls = 0
 
-    async def chat(self, system_prompt: str, messages: list[dict], tools=None, max_tokens: int = 4096) -> ChatResult:
+    async def chat(self, system_prompt: str, messages: list[dict], tools=None, max_tokens: int = 4096, system_volatile: str = "") -> ChatResult:
         self.chat_calls += 1
         if self.delay:
             await asyncio.sleep(self.delay)

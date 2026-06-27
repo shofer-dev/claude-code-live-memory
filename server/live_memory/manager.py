@@ -33,13 +33,16 @@ def _safe_json(s: str) -> dict[str, Any]:
         return {"_raw": s}
 
 
-def _build_system(ws: "WorkspaceState", window: "ContextWindow") -> str:
+def _build_system(ws: "WorkspaceState", window: "ContextWindow") -> tuple[str, str]:
+    """Return (stable, volatile). STABLE = instructions + directory tree — byte-
+    identical across questions, so the Anthropic cache breakpoint on it is written
+    once and read cross-question (the tree dominates per-call input). VOLATILE =
+    knowledge ledger + file manifest — changes per question, so it is kept OUT of
+    the cached prefix (it follows the breakpoint) and never busts the tree cache."""
+    stable = LIVE_MEMORY_SYSTEM_PROMPT.replace("{directory_tree}", ws.directory_tree_block)
+
     ledger = window.knowledge_ledger.strip() or empty_ledger_text()
-    prompt = (
-        LIVE_MEMORY_SYSTEM_PROMPT
-        .replace("{knowledge_ledger}", ledger)
-        .replace("{directory_tree}", ws.directory_tree_block)
-    )
+    sections = [f"## Accumulated knowledge (durable facts distilled from earlier questions)\n{ledger}"]
     # Files Live Memory has read into its knowledge. The content hash is internal
     # (staleness tracking) and is NOT shown to the model. A changed-but-not-yet-
     # re-read file is flagged informationally (the model decides whether to act).
@@ -52,8 +55,8 @@ def _build_system(ws: "WorkspaceState", window: "ContextWindow") -> str:
         else:
             manifest.append(f"[Read into your knowledge: {fc.path} — CHANGED since you read it; your knowledge of it may be out of date]")
     if manifest:
-        prompt += "\n\n" + "\n".join(manifest)
-    return prompt
+        sections.append("\n".join(manifest))
+    return stable, "\n\n".join(sections)
 
 
 def _build_hints(recently_modified: list[str], remaining_s: float) -> str:
@@ -135,7 +138,7 @@ async def process_question(ws: "WorkspaceState", question: str, deadline: float)
         recently = ws.drain_recently_modified()
 
     await _maybe_compact(ws, window)
-    system = _build_system(ws, window)
+    system_stable, system_volatile = _build_system(ws, window)
     conversation = _history_to_messages(window.messages)
     hints = _build_hints(recently, max(0.0, deadline - loop.time()))
     conversation.append({"role": "user", "content": f"{question}\n\n{hints}" if hints else question})
@@ -153,7 +156,7 @@ async def process_question(ws: "WorkspaceState", question: str, deadline: float)
                 answer = "(I reached the time budget before producing a final answer. Ask again with a larger timeout or a narrower question.)"
             break
 
-        result = await ws.llm.chat(system, conversation, tools=TOOL_SCHEMAS)
+        result = await ws.llm.chat(system_stable, conversation, tools=TOOL_SCHEMAS, system_volatile=system_volatile)
         prompt_tok += result.prompt_tokens
         completion_tok += result.completion_tokens
         cost.add(result.cost)
