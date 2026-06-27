@@ -28,7 +28,7 @@ class ConversationStore:
         empty: dict[str, Any] = {
             "messages": [], "file_contexts": [], "knowledge_ledger": "",
             "last_compaction": None, "summaries_written": 0,
-            "questions_answered": 0, "cost_usd": 0.0,
+            "questions_answered": 0, "invocations": 0, "cost_usd": 0.0,
             "created_at": int(time.time() * 1000),
         }
         try:
@@ -50,6 +50,7 @@ class ConversationStore:
             "last_compaction": data.get("last_compaction"),
             "summaries_written": data.get("summaries_written", 0),
             "questions_answered": data.get("questions_answered", 0),
+            "invocations": data.get("invocations", 0),
             "cost_usd": data.get("cost_usd", 0.0),
             "created_at": data.get("created_at", empty["created_at"]),
         }
@@ -66,6 +67,7 @@ class ConversationStore:
             "last_compaction": state.get("last_compaction"),
             "summaries_written": state.get("summaries_written", 0),
             "questions_answered": state.get("questions_answered", 0),
+            "invocations": state.get("invocations", 0),
             "cost_usd": state.get("cost_usd", 0.0),
         }
         self.path.parent.mkdir(parents=True, exist_ok=True)

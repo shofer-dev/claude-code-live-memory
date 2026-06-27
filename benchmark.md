@@ -176,6 +176,14 @@ and excluding the warm-up** query's cheap tokens (§4). **≥ 3–5 runs/arm** (
 are stochastic) → mean ± spread, never one run. Both arms must pass the **same
 acceptance**; failures reported honestly.
 
+**Sanity gate — Live Memory `invocations`** (`/stats`): a with-arm run where the
+operator barely calls `ask_live_memory` (invocations ≈ 0) is **invalid** — it
+measured a no-op, not Live Memory. Track invocations per run; if usage is too low,
+the fix is the **shared** operator prompt / MCP tool description (bias toward
+"ask first, before reading files"), applied identically to both arms so the
+*only* between-arm difference stays tool availability. **Never** restrict the
+with-arm's own file tools to force usage — that confounds the comparison.
+
 ## 8. Status & plan
 
 - [x] Live Memory deployed (systemd); `/live-memory-empty` added; `/stats` exposes

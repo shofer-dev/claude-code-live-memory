@@ -35,7 +35,8 @@ class WorkspaceState:
         # bookkeeping (surfaced via /stats)
         self.last_compaction: int | None = None
         self.summaries_written = 0
-        self.questions_answered = 0
+        self.questions_answered = 0    # calls that produced an answer
+        self.invocations = 0           # ALL tool calls reaching this workspace (incl. errors/timeouts)
         self.cost = CostSnapshot()
         self.created_at = int(time.time() * 1000)
         # keep-warm bookkeeping (seconds, monotonic-ish wall time)
@@ -92,6 +93,7 @@ class WorkspaceState:
         self.last_compaction = data["last_compaction"]
         self.summaries_written = data["summaries_written"]
         self.questions_answered = data["questions_answered"]
+        self.invocations = data["invocations"]
         self.cost.usd = data["cost_usd"]
         self.created_at = data["created_at"]
 
@@ -104,6 +106,7 @@ class WorkspaceState:
                 "last_compaction": self.last_compaction,
                 "summaries_written": self.summaries_written,
                 "questions_answered": self.questions_answered,
+                "invocations": self.invocations,
                 "cost_usd": self.cost.usd,
                 "created_at": self.created_at,
             }
@@ -168,6 +171,7 @@ class WorkspaceState:
             "lastCompaction": self.last_compaction,
             "summariesWritten": self.summaries_written,
             "questionsAnswered": self.questions_answered,
+            "invocations": self.invocations,
             "keepWarms": self.keep_warms,
             "lastTouchAt": int(self.last_touch_at) or None,  # cache last refreshed (query or warm), epoch s
             "queueDepth": self.queue.depth,

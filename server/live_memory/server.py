@@ -96,6 +96,7 @@ def build_server(cfg: Config | None = None) -> FastMCP:
         Raises QueueFull/QuestionTimeout/Exception — the caller decides how to report."""
         _ensure_keep_warm()  # idempotent; starts the warm loop on the first query
         ws = await registry.get(cwd)
+        ws.invocations += 1  # count every well-formed call (answered or not), before processing
 
         async def proc(q: str, c: str, deadline: float) -> QuestionResult:
             return await process_question(ws, q, deadline)
@@ -155,6 +156,7 @@ def build_server(cfg: Config | None = None) -> FastMCP:
                     "contextWindow": {"usedTokens": 0, "maxTokens": c.max_context_tokens, "fillPct": 0.0,
                                       "qaMessages": 0, "fileContexts": 0, "staleFileContexts": 0},
                     "lastCompaction": None, "summariesWritten": 0, "questionsAnswered": 0,
+                    "invocations": 0,
                     "keepWarms": 0, "lastTouchAt": None, "queueDepth": 0, "costUsd": 0.0,
                     "inputTokens": 0, "outputTokens": 0, "cacheReadTokens": 0, "cacheWriteTokens": 0}
         else:

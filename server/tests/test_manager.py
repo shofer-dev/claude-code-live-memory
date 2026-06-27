@@ -114,6 +114,24 @@ def test_stats_exposes_token_breakdown(tmp_cfg):
 
 
 @pytest.mark.asyncio
+async def test_invocations_counter_surfaces_and_persists(tmp_cfg, tmp_path):
+    # `invocations` counts every tool call reaching the workspace (answered or not),
+    # so it is distinct from `questionsAnswered` and survives a reload.
+    from live_memory.workspace import WorkspaceRegistry
+    repo = tmp_path / "proj"
+    (repo / ".git").mkdir(parents=True)
+    reg = WorkspaceRegistry(tmp_cfg, FakeLlm(), Summarizer(FakeLlm()))
+    ws = await reg.get(str(repo))
+    assert ws.stats()["invocations"] == 0            # exposed in /stats from the start
+    ws.invocations = 3                                # 3 calls reached the workspace…
+    ws.questions_answered = 2                         # …but only 2 produced an answer
+    await ws.persist()
+    ws2 = await WorkspaceRegistry(tmp_cfg, FakeLlm(), Summarizer(FakeLlm())).get(str(repo))
+    assert ws2.invocations == 3                       # persisted across reload
+    assert ws2.stats()["invocations"] == 3 and ws2.stats()["questionsAnswered"] == 2
+
+
+@pytest.mark.asyncio
 async def test_registry_clear_and_clear_all(tmp_cfg, tmp_path):
     from live_memory.workspace import WorkspaceRegistry
     repo = tmp_path / "proj"
