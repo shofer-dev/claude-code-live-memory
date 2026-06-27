@@ -1,6 +1,6 @@
 {
   "name": "live-memory",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Persistent, long-context, read-only codebase Q&A companion. A cheap large-context model accumulates codebase knowledge across sessions; agents ask it questions via the ask_live_memory MCP tool instead of re-reading the whole repo.",
   "author": { "name": "shofer.dev" },
   "keywords": ["mcp", "memory", "codebase", "context", "qa"]
