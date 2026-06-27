@@ -33,6 +33,9 @@ Live Memory shines on a **large existing codebase repeatedly queried**, so we us
 **shofer** — our own product, so we can define features *and* verify correctness
 authoritatively, on a real codebase (more credible than a game).
 
+**Base commit (pinned):** every run checks out shofer at exactly
+`32cdefcba07ee9afde9bf65b373a75531f015d96` — never `master` (a moving target).
+
 **Features**: Phase 1 of the shofer evolution roadmap
 (`todos/opencode_inspired_work.md`), initiatives **#3 → #6**, each scoped to a
 **bounded, headless-testable slice**:
@@ -77,7 +80,8 @@ it via per-invocation MCP config:
 | premium tokens | `--output-format json` → `usage` | same |
 | cheap tokens / $ | Live Memory `/stats` | n/a |
 
-Per **feature × arm**: fresh **shofer worktree** at the pinned commit → reset
+Per **feature × arm**: fresh **shofer worktree** at the pinned base commit
+(`32cdefc`) → reset
 `LIVE_MEMORY_DATA_DIR` → `claude -p` (± `--mcp-config`) capturing the JSON usage +
 transcript → run **`pnpm test`** acceptance → snapshot `/stats` → record under
 `runs/<arm>/<feature>/`. Aggregate → per-feature + cumulative deltas.
@@ -115,7 +119,7 @@ re-runnable harness yielding consistent statistics** — *not* bit-identical rer
 
 - [x] Live Memory deployed on `deepseek-v4-flash` (systemd); `/live-memory-empty` added.
 - [x] Harness feasibility validated (`claude -p --mcp-config` smoke).
-- [ ] **Pilot**: convert one tool (#3), 1×1, from shofer `master` → premium-token delta.
+- [ ] **Pilot**: convert one tool (#3), 1×1, from shofer `32cdefc` → premium-token delta.
 - [ ] If positive: full **#3 → #6** sequence, N runs, on the CLI harness.
 - [ ] Fill §9.
 
