@@ -1,0 +1,28 @@
+############ ARM II - WITHOUT ############
+>> ARM II premium:
+41 11310 1688158 48931 46 complete
+>> ARM II changed:
+ packages/types/src/tool.ts                            |  4 ++++
+ packages/types/src/vscode-extension-host.ts           |  1 +
+ src/core/assistant-message/presentAssistantMessage.ts | 10 ++++++++++
+ src/core/prompts/tools/native-tools/index.ts          |  2 ++
+ src/shared/tools.ts                                   |  1 +
+ 5 files changed, 18 insertions(+)
+>> ARM II acceptance:
+TSC rc=0 |       Tests  15 passed (15)
+############ ARM I - WITH (warm-up + feature) ############
+>> ARM I premium:
+35 10343 1560181 46641 40 complete
+>> ARM I changed:
+ packages/types/src/vscode-extension-host.ts           |  1 +
+ src/core/assistant-message/presentAssistantMessage.ts | 10 ++++++++++
+ src/core/auto-approval/tools.ts                       |  1 +
+ src/core/prompts/tools/native-tools/index.ts          |  2 ++
+ src/shared/tools.ts                                   |  1 +
+ 6 files changed, 19 insertions(+)
+>> ARM I acceptance:
+TSC rc=0 |       Tests  15 passed (15)
+WARMUP  cheap_in=83494 cheap_out=1897 inv=1
+FEATURE cheap_in=36665 cheap_out=6162 inv=2
+GATE: feature invocations=2 -> VALID
+############ DONE ############

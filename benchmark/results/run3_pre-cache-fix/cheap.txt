@@ -1,0 +1,3 @@
+WARMUP  cheap_in=83494 cheap_out=1897 inv=1
+FEATURE cheap_in=36665 cheap_out=6162 inv=2
+GATE: feature invocations=2 -> VALID

@@ -1,0 +1,2 @@
+wu_in=42987 wu_cr=156227 wu_cw=67008 wu_out=2945 wu_inv=1
+ft_in=22630 ft_cr=419257 ft_cw=25676 ft_out=4699 ft_inv=1

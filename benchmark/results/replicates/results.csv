@@ -1,0 +1,6 @@
+rep,arm,in,out,cacheR,cacheW,status,apierr,accept,ch_in,ch_cr,ch_cw,ch_out,ch_inv
+1,without,41,8850,1739879,50482,complete,no,yes,,,,,
+1,with,3185,9542,1421528,38349,complete,no,yes,63743,519427,92288,7337,2
+2,without,30,6418,873989,20404,complete,no,yes,,,,,
+2,with,27,8087,913463,25158,complete,no,yes,64237,432404,66173,6169,2
+3,without,25,4794,731884,18232,complete,no,yes,,,,,

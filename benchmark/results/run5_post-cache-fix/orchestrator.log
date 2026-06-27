@@ -1,0 +1,21 @@
+###### ARM II - WITHOUT ######
+premium: 37 7286 1827023 58864 complete | api_error=no
+accept: TSC rc=0 |       Tests  15 passed (15) | schema_has_count_lines=yes | FEATURE=yes |  6 files changed, 17 insertions(+)
+###### ARM I - WITH (warmup + feature) ######
+premium: 28 5040 840787 21521 complete | api_error=no
+accept: TSC rc=0 |       Tests  15 passed (15) | schema_has_count_lines=yes | FEATURE=yes |  3 files changed, 15 insertions(+)
+wu_in=42987 wu_cr=156227 wu_cw=67008 wu_out=2945 wu_inv=1
+ft_in=22630 ft_cr=419257 ft_cw=25676 ft_out=4699 ft_inv=1
+
+================ A/B (post cache-fix, run #2) ================
+PREMIUM (Sonnet)          in     out    cacheR   cacheW     $imp  status
+  without                 37    7286   1827023    58864   0.8782  complete
+  with                    28    5040    840787    21521   0.4086  complete
+
+CHEAP (Haiku)             in     out    cacheR   cacheW     $imp  inv
+  warm-up              42987    2945    156227    67008   0.1571  1
+  feature              22630    4699    419257    25676   0.1201  1
+
+NET (one feature): premium saved $+0.4696 | cheap added (feat) $0.1201 (+warmup $0.1571)
+GATE feature invocations=1 -> VALID
+###### DONE ######
