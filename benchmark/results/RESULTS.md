@@ -6,6 +6,22 @@ token ledgers), `*.accept` (acceptance), `cheap.txt` (/stats deltas), `results.c
 **imputed** at published API rates (Sonnet building model, Haiku Live Memory model);
 billing is via subscription, so `$` is notional, not invoiced.
 
+## 0. Confound correction — the early runs are INVALID for the A/B
+
+Live Memory is installed as a **global plugin** (`live-memory@shofer`), so every
+`claude -p` session — *including the "without" arm* — was offered `ask_live_memory`,
+and the without-arm used it. So `run3`, `run5`, and `replicates/` did **not** compare
+with-vs-without Live Memory; **both arms had it**. The with-arm's only real difference
+was the warm-up, which *adds* cost — which is why the with-arm was frequently *more*
+expensive (delta ranged −53%…+59%). Those dirs are kept only as harness-iteration
+artifacts; their A/B deltas mean nothing.
+
+**Fix:** both arms now pass **`--strict-mcp-config`** (disables the plugin/built-in
+MCP set). Without-arm gets no `--mcp-config` → zero Live Memory (verified: tool list
+returns `NONE`); with-arm gets only our wired instance. The corrected, instrumented
+harness is `harness/run_reps2.sh` (+ `harness/analyze.py`); results land in
+`results/reps2/`.
+
 ## 1. Live Memory prefix-cache fix (verified, landed)
 
 The cheap-model cost of every query was dominated by the **directory tree** (~30k

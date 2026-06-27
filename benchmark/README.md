@@ -120,26 +120,31 @@ utility + wire one run path through it. **Acceptance:** cancellation/timeout tes
 
 ## 5. Harness (runnable by us, reproducible by anyone)
 
-The operating agents must actually *have* `ask_live_memory` — which a normal
-agent harness/subagent does **not** by default. The public `claude` CLI solves
-it via per-invocation MCP config:
+See [`harness/`](harness/) for the runnable scripts. The operating agents must
+actually *have* `ask_live_memory` — wired per-invocation via `--mcp-config`.
 
-| | with Live Memory (arm I) | without (arm II) |
-|---|---|---|
-| invocation | `claude -p "<prompt>" --mcp-config <live-memory>` | `claude -p "<prompt>"` |
-| premium tokens | `--output-format json` → `usage` | same |
-| cheap tokens / $ | Live Memory `/stats` | n/a |
+> **CRITICAL — arm isolation (`--strict-mcp-config`).** If Live Memory is installed
+> as a **global plugin** (`live-memory@shofer`), *every* `claude -p` session gets
+> `ask_live_memory` — including the "without" arm. That silently confounds the A/B
+> (both arms have Live Memory). **Both arms must pass `--strict-mcp-config`**, which
+> disables the built-in/plugin MCP set:
+>
+> | | with Live Memory (arm I) | without (arm II) |
+> |---|---|---|
+> | invocation | `claude -p … --mcp-config <ours> --strict-mcp-config` | `claude -p … --strict-mcp-config` |
+> | live-memory tools | **only** our wired instance | **none** (verified: lists `NONE`) |
+>
+> The early runs (`results/run3,run5,replicates`) predate this and are **confounded**
+> (the without-arm had the plugin) — kept only as harness-iteration artifacts.
 
-Per **feature × arm**: fresh **shofer worktree** at the pinned base commit
-(`32cdefc`) → reset
-`LIVE_MEMORY_DATA_DIR` → `claude -p` (± `--mcp-config`) capturing the JSON usage +
-transcript → run **`pnpm test`** acceptance → snapshot `/stats` → record under
-`runs/<arm>/<feature>/`. Aggregate → per-feature + cumulative deltas.
+Per **feature × arm**: fresh **faithful build-env worktree** at the pinned base
+(`32cdefc`, via `harness/setup_worktree.sh`) → `claude -p` (± `--mcp-config`,
+always `--strict-mcp-config`) capturing the **`stream-json`** transcript →
+acceptance (`tsc` green + specs + feature-present) → snapshot `/stats` → record.
 
-**Validated (smoke):** a headless `claude -p --mcp-config` agent *called*
-`ask_live_memory`, `--output-format json` returned usage, and Live Memory logged
-the query (`/stats` `questionsAnswered` ticked). The harness is feasible by us and
-replayable by anyone with the `claude` CLI.
+**Bounds:** **no OS `timeout`** (a SIGKILL corrupts the JSON ledger); `--max-turns`
+is the only, clean bound. API failures (`ConnectionRefused`/`api_retry`) are
+detected → run marked **INVALID**, not scored.
 
 ## 6. Reproducibility & inspectability
 
@@ -148,7 +153,10 @@ re-runnable harness yielding consistent statistics** — *not* bit-identical rer
 (impossible for LLMs; claiming otherwise is dishonest).
 
 - **Pin**: shofer commit SHA, model IDs (building + Live Memory), prompts
-  (verbatim), config/tool-sets, temperature 0, a Dockerfile + lockfiles.
+  (verbatim), config/tool-sets, lockfiles. **Note:** `claude -p` exposes **no
+  temperature/seed flag**, so the building agent's sampling **cannot be pinned** —
+  runs are inherently stochastic. This is the root of the variance (§7); we counter
+  it with the mechanism metric + per-turn normalization + replicates, not determinism.
 - **Record** (per run): full transcripts, per-agent **premium** token ledgers +
   `/stats` **cheap** tokens, the produced diffs, acceptance logs, and Live
   Memory's **Q&A log** — as raw data, so the headline % is *recomputable*.
@@ -159,8 +167,25 @@ re-runnable harness yielding consistent statistics** — *not* bit-identical rer
 
 ## 7. Measurement
 
-Capture the full **token matrix** — {expensive building model, cheap Live Memory
-model} × {input, output, cache-read, cache-write} — per arm:
+**Why total-$ alone is the wrong lens.** A single run's premium cost is dominated
+by **cache-read tokens** — the building agent re-reading its own growing
+conversation each turn, ~`O(turns²)`. Turn count is highly stochastic, so total-$
+swings wildly (observed: the *without*-arm baseline alone varied ~2×; the with-vs-
+without delta ranged −53%…+59% across runs) and **buries** Live Memory's actual
+effect, which is only on *codebase* reading. Single-feature total-$ is therefore
+near-useless on its own.
+
+**Primary metric — the mechanism (low variance, directly attributable).** From the
+`stream-json` transcript ([`harness/analyze.py`](harness/analyze.py)) measure what
+Live Memory actually *replaces*: **premium tokens the building agent spends reading
+the codebase itself** = Σ tool-result tokens of `Read`/`Grep`/`Glob`. The without-
+arm should read a lot; the with-arm offloads to `ask_live_memory` and reads little.
+Also record **turns**, read/edit/lm call counts, and **premium-$ per turn**
+(normalizes out path length). These isolate the treatment from the `O(turns²)`
+context-churn nuisance.
+
+**Secondary — the full token matrix** — {building model, Live Memory model} ×
+{input, output, cache-read, cache-write} — per arm:
 
 - **Expensive (building) model**: from each `claude -p --output-format json`
   `usage` (input/output + cache fields), summed over the subagents.
