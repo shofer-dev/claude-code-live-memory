@@ -22,20 +22,20 @@ ok(){ ( cd "$WT/src"; pnpm check-types >/dev/null 2>&1 && pnpm vitest run list-f
 # BOTH arms: --strict-mcp-config. without: no --mcp-config -> zero LM. with: only ours.
 feat(){ ( cd "$WT" && claude -p "$P" --model "$MODEL" --append-system-prompt "$SYS" --strict-mcp-config \
     --dangerously-skip-permissions --max-turns 200 --output-format stream-json --verbose $2 ) >"$1" 2>/dev/null; }
-row(){ python3 -c "import json,sys;d=json.loads(open('$1.json').read());print('$2,$3,'+','.join(str(d[k]) for k in ['turns','read_calls','read_tok','lm_calls','lm_tok','edit_calls','pin','pout','pcr','pcw','status']))"; }
+row(){ python3 -c "import json,sys;d=json.loads(open('$1.json').read());print('$2,$3,'+','.join(str(d[k]) for k in ['turns','read_calls','read_tok','lm_calls','lm_tok','edit_calls','pin','pout','pcr','pcw','status','api_fail']))"; }
 
 echo "rep,arm,turns,read_calls,read_tok,lm_calls,lm_tok,edit_calls,pin,pout,pcr,pcw,status,apierr,accept,ch_in,ch_cr,ch_cw,ch_out,ch_inv" > "$RUNS/results.csv"
 for k in $(seq 1 $K); do
   echo ">>> REP $k WITHOUT"; reset; feat "$RUNS/r${k}_wo.jsonl" ""
   python3 "$AN" "$RUNS/r${k}_wo.jsonl" > "$RUNS/r${k}_wo.json"
-  echo "$(row "$RUNS/r${k}_wo" $k without),$(err "$RUNS/r${k}_wo.jsonl"),$(ok),,,,," >> "$RUNS/results.csv"
+  echo "$(row "$RUNS/r${k}_wo" $k without),$(ok),,,,," >> "$RUNS/results.csv"
   echo ">>> REP $k WITH"; reset; curl -s -X POST http://127.0.0.1:7711/clear -d '{"all":true}' >/dev/null
   read i0 o0 r0 w0 v0 <<<"$(st)"
   ( cd "$WT" && claude -p "Use ask_live_memory once: question='Explore and understand this codebase and give a high-level summary of its architecture, main subsystems and conventions', cwd='$WT', timeout=200. Then report it." --model "$MODEL" --mcp-config "$LMCFG" --strict-mcp-config --allowedTools "mcp__live-memory__ask_live_memory" --dangerously-skip-permissions --max-turns 6 --output-format json ) >/dev/null 2>&1
   feat "$RUNS/r${k}_wi.jsonl" "--mcp-config $LMCFG"
   read i2 o2 r2 w2 v2 <<<"$(st)"
   python3 "$AN" "$RUNS/r${k}_wi.jsonl" > "$RUNS/r${k}_wi.json"
-  echo "$(row "$RUNS/r${k}_wi" $k with),$(err "$RUNS/r${k}_wi.jsonl"),$(ok),$((i2-i0)),$((r2-r0)),$((w2-w0)),$((o2-o0)),$((v2-v0))" >> "$RUNS/results.csv"
+  echo "$(row "$RUNS/r${k}_wi" $k with),$(ok),$((i2-i0)),$((r2-r0)),$((w2-w0)),$((o2-o0)),$((v2-v0))" >> "$RUNS/results.csv"
 done
 
 echo "=== AGGREGATE (valid reps only) ==="; python3 - "$RUNS/results.csv" <<'PY'

@@ -1,0 +1,11 @@
+>>> REP 1 WITHOUT
+>>> REP 1 WITH
+=== AGGREGATE (valid reps only) ===
+
+without  (n=1)
+  MECHANISM codebase read_tok : 6.135e+04 ± 0   read_calls 26 ± 0  lm_calls 0 ± 0
+  turns                       : 32 ± 0
+  premium $ (total)           : 0.6242 ± 0
+  premium $ / turn            : 0.01951 ± 0
+with: no valid reps
+DONE

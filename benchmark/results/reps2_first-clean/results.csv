@@ -1,0 +1,3 @@
+rep,arm,turns,read_calls,read_tok,lm_calls,lm_tok,edit_calls,pin,pout,pcr,pcw,status,apierr,accept,ch_in,ch_cr,ch_cw,ch_out,ch_inv
+1,without,32,26,61354,0,0,10,31,6568,1195294,44529,complete,no,yes,,,,,
+1,with,51,19,34053,1,95,16,49,9208,3025761,71674,complete,YES,yes,98977,381422,124538,5077,2
