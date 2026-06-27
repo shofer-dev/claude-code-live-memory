@@ -56,6 +56,39 @@ leaves *execution* untouched, and this feature is execution-bound. The intuition
 opposite. **Next experiments that can show a premium win: (a) an understanding-heavy
 feature; (b) the sequence (hot memory → fewer turns via accumulation).**
 
+## UNDERSTANDING-BOUND task (the regime where it wins)
+
+Read-only trace task (synthesize the tool-call code path across ~4k lines, no edits),
+P=4, K=12, 23/24 valid (`results/understanding/`):
+
+| token dimension | without (n=12) | with (n=11) | Δ |
+|---|---|---|---|
+| read_tok | 48,393 ± 18,035 | 3,456 ± 3,093 | **−93%** |
+| **cache_read** (the bill) | 544,038 ± 416,728 | 307,217 ± 136,840 | **−44%** |
+| output | 4,856 | 4,378 | −10% |
+| **premium $** | 0.366 ± 0.228 | 0.213 ± 0.087 | **−42%** (t=2.15, p≲.05) |
+
+Opposite of the edit-bound feature: with no edits to backfill the window, the offloaded
+reading stays gone, so **cache_read genuinely drops −44%** and premium **−42%**.
+
+**Net (the two conditions for a real win):**
+| | total $ | vs without |
+|---|---|---|
+| without | 0.366 | — |
+| with, **free/local** cheap model | 0.213 | **−42% WIN** |
+| with, Haiku incl. warm-up | 0.443 | +21% |
+
+1. **Task must be understanding-bound** — premium reading to offload (edit-bound = no premium moves).
+2. **Cheap-model cost < premium saved (~$0.15).** Haiku ($0.229) *exceeds* it → +21% even here;
+   a near-free model (deepseek-flash/local) or a hot memory (no warm-up) flips it to a win.
+
+> **Live Memory cuts premium cost only on comprehension/exploration-heavy work, and only
+> nets positive when the weak model is cheap enough (or already hot) to stay under the
+> premium it saves.** On edit-heavy work the premium doesn't move, so no model choice helps.
+
+Caveat: marginally significant (the without-arm's exploration cost is wildly variable,
+CV ~62%); direction is clear, magnitude needs more reps.
+
 ## 1. Live Memory prefix-cache fix (verified, landed)
 
 The cheap-model cost of every query was dominated by the **directory tree** (~30k

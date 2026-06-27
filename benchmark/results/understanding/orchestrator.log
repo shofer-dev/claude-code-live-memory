@@ -1,0 +1,29 @@
+=== launch 4 workers x 12 reps (understanding-bound trace task) ===
+[w1] rep 1 done
+[w4] rep 4 done
+[w3] rep 3 done
+[w2] rep 2 done
+[w1] rep 5 done
+[w3] rep 7 done
+[w4] rep 8 done
+[w2] rep 6 done
+[w4] rep 12 done
+[w3] rep 11 done
+[w1] rep 9 done
+[w2] rep 10 done
+=== AGGREGATE (valid only) ===
+
+without (n=12)
+  read_tok      : 4.839e+04 ± 1.8e+04
+  output tok    : 4856 ± 1.2e+03
+  cache_read tok: 5.44e+05 ± 4.2e+05
+  premium $     : 0.3657 ± 0.23
+
+with (n=11)
+  read_tok      : 3456 ± 3.1e+03
+  output tok    : 4378 ± 1.5e+03
+  cache_read tok: 3.072e+05 ± 1.4e+05
+  premium $     : 0.2134 ± 0.087
+
+invalid: 1/24
+DONE
