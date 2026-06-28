@@ -1,0 +1,141 @@
+# Live Memory — future directions
+
+Parked design ideas for evolving Live Memory, grounded in the benchmark findings
+(see [`benchmark/results/RESULTS.md`](benchmark/results/RESULTS.md)). Not committed
+work — a captured brainstorm to pick up later.
+
+## 0. What the benchmark established (the constraints these ideas must respect)
+
+- **Live Memory's premium-token win is task-shaped.** On **understanding/exploration-
+  heavy** work it cuts the building agent's premium cost (~**−42%** on a read-only
+  "trace the code path" task: `cache_read` −44%). On **edit-heavy** work it's **flat**
+  — reading-to-edit is irreducible (you must read a file's exact bytes to edit it) and
+  the edits backfill the window, so the offloaded reading never reaches the bill.
+- **The net win has two conditions:** (1) the task is understanding-bound, AND (2) the
+  cheap model's cost stays **under the premium it saves** (~$0.15). Haiku's *exploration*
+  cost (warm-up + per-query re-reading, ~$0.23) **exceeded** that — so even the winning
+  regime was +21% net with metered Haiku. A near-free/local model **or a hot memory**
+  flips it to a real win.
+- **Two bottlenecks to attack:** (a) the **cheap-side exploration/warm-up cost**, and
+  (b) **window bloat** (the building agent's premium is dominated by `cache_read` =
+  re-reading its growing context; Live Memory's own context has the same dynamic).
+
+The two ideas below attack exactly these: **passive learning** removes the cheap-side
+exploration cost and keeps Live Memory hot for free; **denser representation** keeps the
+window lean so warm knowledge doesn't reintroduce bloat.
+
+## 1. Passive (organic) population
+
+**Idea.** Populate Live Memory not (only) via `ask_live_memory`, but **passively** from
+the building agent's normal `Read`/`Edit`/`Write` I/O. The file contents are already
+flowing; tee a copy into Live Memory so it learns the code as a side effect of real work,
+**without paying to re-read it**. `ask_live_memory` is unchanged and **additive** — it can
+still read actively when the passive layer hasn't covered something.
+
+**Why it matters.** Directly removes the cheap-side exploration cost the benchmark showed
+was eating the win, and realizes — for free, from real work — the "hot memory" / "free
+cheap model" assumptions that the −42% win depends on. Floor = today's behavior (active
+fallback); ceiling = warm, cheap, always-in-sync. **No regression risk.**
+
+**Properties.**
+- **No double-read** — population cost collapses from "re-explore" to "summarize what was
+  already observed."
+- **Always in-sync** — observing every `Edit`'s *new* content is strictly stronger than
+  today's "mark stale → re-read later." Never stale on the hot path.
+- **Cross-task flywheel** — even edit-heavy sessions (which can't win on premium) passively
+  warm Live Memory for *future* understanding queries (which can).
+
+**Implementation: tee, don't proxy.** Do **not** replace the agent's tools (matching native
+Read/Edit/Write behavior — permissions, diffs, line numbering, partial reads — is a trap).
+Extend the existing hook feed (`/notify` from `PostToolUse`/`FileChanged`) to carry the
+**content**, not just the change event: a `PostToolUse` hook POSTs `{path, content}` to a
+Live Memory ingestion endpoint. Native tools untouched; agent notices nothing.
+
+**Load-bearing design decisions (now that two streams feed one window):**
+1. **Ingest raw, let existing compaction digest it** → population is ~free at write-time
+   (no model call to ingest; the compaction that already runs summarizes on overflow).
+   But the **retention/compaction policy is now the key knob**: what stays raw (available,
+   no re-read) vs gets summarized (lean prefix), and when.
+2. **Wire passive obs into the freshness/manifest machinery so it *triggers* the active
+   path.** Observed `Edit` → file content authoritative/current; observed `Read` →
+   refresh. Then `ask_live_memory` reads actively **only when the manifest is missing or
+   stale for the question** — precise, automatic, and the active reads also populate.
+
+**Measurement hinge (run before building much):** does a passively-warmed window make
+`ask_live_memory` **cheaper net of the bloat it adds**? Warm the window via observation,
+then measure query cost vs cold. If compaction keeps the prefix lean → real, self-sustaining
+win. If raw observations pile up faster than they're distilled → bloat could eat it.
+
+## 2. Denser knowledge representation
+
+**Goal, disciplined by the constraint.** The model ultimately consumes **tokens** and
+reasons best over **fairly natural language**. So "denser than prose" splits into two
+*different* levers — and the goal is **not** "max knowledge in the window" (that bloats
+cost + dilutes attention) but "**the right knowledge at the right density for cheap
+reasoning.**"
+
+- **Retrieval** — don't hold it all; fetch the *right* subset per query (RAG, graph
+  queries, hierarchy). The scale lever. It's *less* text, better chosen — not denser text.
+- **Encoding** — make the included tokens carry more (structured facts, signatures/call-
+  edges instead of prose/bodies). Real, but with a **sweet spot**: too terse/symbolic and
+  the LLM reasons *worse*. The densest store is not the most useful one.
+
+**Verdicts on specific representations:**
+
+- **Binary / embeddings-into-context — no (with this stack).** Hosted LLMs can't read
+  arbitrary vectors/blobs; "soft-prompt / KV-as-memory / memory-token" research needs
+  model-side support you don't have over an API. Embeddings are excellent for the **index**
+  (finding relevant knowledge); the retrieved item still renders to text. Don't chase
+  feeding vectors to the model.
+- **RAG — yes for scale, one caveat.** External store + top-k retrieval → unbounded
+  knowledge, lean window. **Weak on multi-hop / "how does X flow end-to-end"** questions
+  (the trace-task regime where Live Memory wins) — top-k chunks give fragments, not a
+  traversal.
+- **Code graph — strongest for code.** Code *is* a graph (calls, imports, types, data
+  flow); most understanding questions are **traversals** over it ("trace the tool-call
+  path" is literally a graph walk). Captures relationships prose flattens. Architecture:
+  graph is the queryable **store** → extract the relevant **subgraph** per query → render
+  *that* to compact text. Composes with passive sync (edits update nodes/edges). Tooling
+  exists (tree-sitter, LSP, SCIP/stack-graphs) — real engineering, not magic.
+- **API / symbol skeleton — the 80/20, lowest-regret first step.** Most "where/how/what-
+  calls-what" questions are answered by the **shape** (signatures, types, docstrings, call
+  edges), not the bodies. Store the skeleton densely (a fraction of full-file tokens,
+  lossless about *structure*), fetch bodies on demand. A strict win over today's prose
+  ledger for structural questions, without committing to a full graph-query engine.
+
+**Synthesis — recommended target architecture:** a **hierarchical, graph-aware,
+passively-synced index** as the store, with retrieval projecting a small dense subset into
+the window:
+- always-resident **core map** (repo architecture, entry points, conventions) — the
+  genuine "wisdom" worth permanent tokens;
+- **graph + symbol skeleton** as the structured layer;
+- **bodies/details retrieved on demand** when a query needs them;
+- the window holds a **query-relevant projection**, not a growing prose blob.
+
+This is the direct lever on the window-bloat bottleneck (§0b): it keeps the prefix lean →
+cheap `cache_read` → preserves/amplifies the understanding-task win, and it's what lets
+passive population scale (ingest into a structured index, not a flat window).
+
+**Hard parts / risks:**
+1. **Retrieval/traversal quality is the whole game** — and hard for multi-hop; a graph
+   helps but "which subgraph answers this" needs query planning, not just top-k.
+2. **Incremental maintenance** of derived structure (graph/embeddings/skeleton) on every
+   edit (ties to §1) — feasible but non-trivial, especially cross-language.
+3. **Over-structuring backfires** — stripping natural-language scaffolding can make the
+   LLM reason worse. Want dense facts *plus* prose glue; tuned empirically, not maximized.
+4. **Scope** — this becomes a *code-intelligence platform*, not a context-window manager.
+   Worth it if the payoff (cheap, always-hot, scalable understanding) holds — eyes open.
+
+## 3. Sequencing (if/when we pick this up)
+
+1. **Symbol/call-graph skeleton layer** — concrete, densest *faithful* code representation,
+   directly serves the traversal questions where Live Memory wins, strict win over the
+   prose ledger. Lowest regret.
+2. **Passive ingestion via content-carrying hooks** + the manifest-triggered active path —
+   plus the measurement hinge (warm vs cold query cost).
+3. **Retrieval/subgraph projection** to keep the window lean as the store grows.
+4. Only then consider a full graph-query engine / hierarchical multi-resolution store.
+
+Each step is independently measurable against the benchmark harness (`benchmark/harness/`):
+the metric that matters is **premium tokens on understanding-bound tasks**, and whether the
+cheap-side cost stays under the premium saved.
