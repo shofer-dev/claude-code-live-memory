@@ -176,14 +176,24 @@ def build_server(cfg: Config | None = None) -> FastMCP:
         kind = body.get("kind", "changed")
         event = body.get("event", "")  # FileChanged: change | add | unlink
         cwd = body.get("cwd") or os.getcwd()
+        contents = body.get("contents") or {}  # passive ingestion: {path: file content}
         ws = registry.existing(cwd)
         if ws is None:
             return JSONResponse({"ok": True, "applied": 0, "note": "workspace not loaded"})
+        passive = registry.cfg.passive_ingestion
+        cap = registry.cfg.passive_max_file_bytes
         applied = 0
         for p in body.get("paths") or []:
             rel = os.path.relpath(p, cwd) if os.path.isabs(p) else p
-            if kind == "edited":
+            teed = contents.get(p) if isinstance(contents, dict) else None
+            if passive and isinstance(teed, str):
+                # Passive (organic) population: tee the file's current bytes into the
+                # window (fresh, authoritative) instead of just flagging it stale.
+                recorded = ws.observe(rel, teed[:cap])
+            elif kind == "edited":
                 recorded = ws.note_modified(rel)        # tool edit → next-question hint
+            elif kind == "read":
+                recorded = False                          # no content / passive off → nothing to track
             elif event == "unlink":
                 recorded = ws.mark_deleted(rel)          # gone (deleted / moved away)
             else:

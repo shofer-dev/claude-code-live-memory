@@ -20,6 +20,10 @@ from .question_queue import QuestionQueue
 from .summarizer import Summarizer
 from .tool_executor import ToolExecutor
 
+# A FileChanged event for a path teed in within this window is treated as our own
+# edit echoing back (the bytes are already current) and does not mark it stale.
+OBSERVE_INVALIDATE_GRACE_MS = 5000
+
 
 class WorkspaceState:
     def __init__(self, cwd: str, cfg: Config, llm: LlmClient, summarizer: Summarizer):
@@ -117,14 +121,31 @@ class WorkspaceState:
         """Task/tool edit (PostToolUse): flag for the next question's hint — but
         ONLY if Live Memory has actually read the file (otherwise there is no
         prior knowledge that could be stale). The read set grows over time, so
-        the longer it runs the more edits it tracks. Returns whether recorded."""
+        the longer it runs the more edits it tracks. Returns whether recorded.
+
+        Superseded by `observe()` when passive ingestion is on: teeing the new
+        bytes (fresh, authoritative) is strictly stronger than this stale hint."""
         if self.window.has_file(path):
             self.recently_modified.add(path)
             return True
         return False
 
+    def observe(self, path: str, content: str) -> bool:
+        """Passive ingestion (FUTURE_DIRECTIONS §1): the building agent's hook teed
+        `path`'s current bytes (a Read/Edit/Write it just performed). Store them so
+        the model answers without re-reading, and mark the file fresh/current. Unlike
+        note_modified/invalidate this records even for never-read files (it IS the new
+        knowledge), and clears any pending stale hint. Always returns True."""
+        self.window.observe(path, content)
+        self.recently_modified.discard(path)  # current now → no stale hint needed
+        return True
+
     def invalidate(self, path: str) -> bool:
-        """External edit (FileChanged 'change'/'add'): only matters if read."""
+        """External edit (FileChanged 'change'/'add'): only matters if read. Skipped
+        when the path was just teed in by `observe()` — that FileChanged is our own
+        edit echoing back, and the teed bytes are already current."""
+        if self.window.recently_observed(path, OBSERVE_INVALIDATE_GRACE_MS):
+            return False
         if self.window.has_file(path):
             self.window.invalidate_file_context(path)
             return True

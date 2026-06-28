@@ -45,6 +45,13 @@ def _get(url: str) -> dict:
         return json.loads(r.read())
 
 
+def _post(url: str, body: dict) -> dict:
+    req = urllib.request.Request(url, data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"}, method="POST")
+    with urllib.request.urlopen(req, timeout=5) as r:
+        return json.loads(r.read())
+
+
 class _MockLLM(BaseHTTPRequestHandler):
     """Minimal OpenAI-compatible /chat/completions stub — always answers."""
 
@@ -155,3 +162,13 @@ async def test_mcp_round_trip_and_async_and_keepwarm(server):
             break
         time.sleep(0.1)
     assert any("Keep-warm loop started" in line for line in logs), "keep-warm loop did not start"
+
+    # passive ingestion over real HTTP: teeing a file's bytes via /notify records a
+    # content-bearing file context (no active read needed) — FUTURE_DIRECTIONS §1.
+    before = _get(f"{base}/stats?cwd={quote(cwd)}")["contextWindow"]["fileContexts"]
+    resp = _post(f"{base}/notify", {"kind": "edited", "cwd": cwd,
+                                    "paths": [f"{cwd}/hello.txt"],
+                                    "contents": {f"{cwd}/hello.txt": "hi from the agent"}})
+    assert resp["applied"] == 1
+    after = _get(f"{base}/stats?cwd={quote(cwd)}")["contextWindow"]["fileContexts"]
+    assert after == before + 1

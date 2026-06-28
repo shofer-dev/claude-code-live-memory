@@ -9,6 +9,15 @@
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/notify.py\" edited"
           }
         ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/notify.py\" read"
+          }
+        ]
       }
     ],
     "FileChanged": [

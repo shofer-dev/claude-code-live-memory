@@ -46,14 +46,27 @@ def _build_system(ws: "WorkspaceState", window: "ContextWindow") -> tuple[str, s
     # Files Live Memory has read into its knowledge. The content hash is internal
     # (staleness tracking) and is NOT shown to the model. A changed-but-not-yet-
     # re-read file is flagged informationally (the model decides whether to act).
-    manifest = []
+    # Observed entries (passive ingestion, FUTURE_DIRECTIONS §1) carry the file's
+    # current bytes teed from the building agent's session → rendered inline so the
+    # model answers without a re-read; the rest stay one-line manifest references.
+    manifest: list[str] = []
+    observed: list[str] = []
     for fc in window.file_contexts:
         if fc.deleted:
             manifest.append(f"[Previously read: {fc.path} — DELETED or moved/renamed; it no longer exists at this path, so your knowledge of it is obsolete. If you still need it, locate its new path (Glob/Grep/find_paths) or report that it is gone.]")
+        elif fc.has_content:
+            observed.append(f"#### {fc.path}\n{fc.content}")
         elif fc.content_hash:
             manifest.append(f"[Read into your knowledge: {fc.path} (~{fc.token_estimate} tokens)]")
         else:
             manifest.append(f"[Read into your knowledge: {fc.path} — CHANGED since you read it; your knowledge of it may be out of date]")
+    if observed:
+        sections.append(
+            "## Files observed live from the building agent's session\n"
+            "These are current, authoritative file contents teed from the agent's own "
+            "Read/Edit/Write — treat them as up to date and answer from them without "
+            "re-reading.\n\n" + "\n\n".join(observed)
+        )
     if manifest:
         sections.append("\n".join(manifest))
     return stable, "\n\n".join(sections)
@@ -79,11 +92,38 @@ def _history_to_messages(messages: list[ChatMessage]) -> list[dict[str, Any]]:
     return [{"role": m.role, "content": m.content} for m in messages if m.role in ("user", "assistant")]
 
 
+async def _distill_observations(ws: "WorkspaceState", window: "ContextWindow", target: int) -> None:
+    """Compaction tier 0 (passive ingestion, FUTURE_DIRECTIONS §1): the raw bytes
+    teed in by `observe()` are the bulk of any window bloat. Distill the least-
+    recently-used observations into the durable knowledge ledger (one batched
+    neutral summary), then drop their raw bytes — leaving manifest-only entries
+    that stay re-readable on demand. This is the retention knob: raw while it fits,
+    summarized into the lean prefix under pressure."""
+    pending: list[tuple[str, str]] = []
+    for fc in window.content_contexts_lru():
+        if window.estimated_token_count() <= target:
+            break
+        pending.append((fc.path, fc.content))
+        window.clear_content(fc.path)  # collapses its token weight → frees budget now
+    if not pending:
+        return
+    observed = [ChatMessage(role="user", content=f"[Observed file: {p}]\n{c}") for p, c in pending]
+    new_ledger, cost = await ws.summarizer.summarize(window.knowledge_ledger, observed)
+    window.knowledge_ledger = new_ledger
+    ws.add_cost(cost)
+    ws.last_compaction = now_ms()
+    ws.summaries_written += 1
+
+
 async def _maybe_compact(ws: "WorkspaceState", window: "ContextWindow") -> None:
     # Compact down to the SOFT threshold (compaction_threshold, default 0.85) once
-    # the window exceeds it — not the hard max. Tier 1: evict re-readable file
-    # contexts (LRU). Tier 2: if that isn't enough, neutrally summarize oldest Q&A.
+    # the window exceeds it — not the hard max. Tier 0: distill+shed observed file
+    # bytes (passive ingestion). Tier 1: evict re-readable file contexts (LRU).
+    # Tier 2: if that isn't enough, neutrally summarize oldest Q&A.
     target = int(window.max_context_tokens * window.fill_threshold)
+    if window.estimated_token_count() <= target:
+        return
+    await _distill_observations(ws, window, target)
     if window.estimated_token_count() <= target:
         return
     still_over = window.enforce_limit(target)

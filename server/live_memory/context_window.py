@@ -11,8 +11,9 @@ Two evictable kinds, handled differently (DESIGN.md §Compaction):
 from __future__ import annotations
 
 import copy
+import hashlib
 
-from .models import ChatMessage, ContextUsage, FileContext, estimate_tokens
+from .models import ChatMessage, ContextUsage, FileContext, estimate_tokens, now_ms
 
 TRUNCATED_MESSAGE_PAIR_TOKEN_COST = 100
 
@@ -71,13 +72,56 @@ class ContextWindow:
                 fc.content_hash = entry.content_hash
                 fc.token_estimate = entry.token_estimate
                 fc.last_referenced_at = entry.last_referenced_at
+                if entry.content:  # an observation: adopt teed bytes (don't wipe on a manifest-only re-read)
+                    fc.content = entry.content
+                    fc.observed_at = entry.observed_at
+                    fc.deleted = False  # observing current bytes un-deletes the path
                 return
         self.file_contexts.append(entry)
+
+    def observe(self, path: str, content: str) -> None:
+        """Passive ingestion (FUTURE_DIRECTIONS §1): record `path`'s current bytes
+        (teed from the building agent's I/O) as a fresh, content-bearing entry so
+        the model can answer without re-reading. Records even for never-read files."""
+        self.upsert_file_context(FileContext(
+            path=path,
+            content_hash=hashlib.sha256(content.encode("utf-8", "replace")).hexdigest(),
+            token_estimate=estimate_tokens(content),
+            last_referenced_at=now_ms(),
+            content=content,
+            observed_at=now_ms(),
+        ))
+
+    def recently_observed(self, path: str, grace_ms: int) -> bool:
+        """True if `path`'s bytes were teed in within `grace_ms` — used to ignore a
+        FileChanged event that is just our own teed edit echoing back."""
+        for fc in self.file_contexts:
+            if fc.path == path:
+                return fc.observed_at > 0 and (now_ms() - fc.observed_at) <= grace_ms
+        return False
+
+    def content_contexts_lru(self) -> list[FileContext]:
+        """Content-bearing (observed) entries, least-recently-referenced first —
+        the order compaction distills + sheds them in."""
+        return sorted((fc for fc in self.file_contexts if fc.has_content),
+                      key=lambda fc: fc.last_referenced_at)
+
+    def clear_content(self, path: str) -> bool:
+        """Drop an observation's raw bytes, leaving a manifest-only entry (still
+        'known', re-readable on demand). Its token weight collapses to the manifest
+        one-liner so the freed budget is actually reclaimed."""
+        for fc in self.file_contexts:
+            if fc.path == path and fc.content:
+                fc.content = ""
+                fc.token_estimate = estimate_tokens(f"[Read into your knowledge: {path}]")
+                return True
+        return False
 
     def invalidate_file_context(self, path: str) -> bool:
         for fc in self.file_contexts:
             if fc.path == path:
                 fc.content_hash = ""  # "" → stale → re-read / dropped on next validate
+                fc.content = ""       # teed bytes no longer match disk → drop them
                 return True
         return False
 
@@ -87,6 +131,7 @@ class ContextWindow:
         for fc in self.file_contexts:
             if fc.path == path:
                 fc.content_hash = ""
+                fc.content = ""
                 fc.deleted = True
                 return True
         return False

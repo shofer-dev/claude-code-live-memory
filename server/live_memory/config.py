@@ -143,6 +143,13 @@ class Config:
     # Opt-in: also expose ask_live_memory_submit / ask_live_memory_result (a
     # server-side submit/poll pattern, since MCP has no native async tool calls).
     async_tools: bool = field(default_factory=lambda: _truthy(os.environ.get("LIVE_MEMORY_ASYNC_TOOLS", "false")))
+    # Passive (organic) population (FUTURE_DIRECTIONS §1): ingest file content teed
+    # by the building agent's Read/Edit/Write hooks (POST /notify with `contents`),
+    # so the Live Memory warms up from real work without paying to re-read. On by
+    # default (floor = today's behavior via the active-read fallback); turn off for a
+    # clean A/B baseline. The server-side cap truncates any single teed file.
+    passive_ingestion: bool = field(default_factory=lambda: _truthy(os.environ.get("LIVE_MEMORY_PASSIVE_INGESTION", "true")))
+    passive_max_file_bytes: int = field(default_factory=lambda: int(os.environ.get("LIVE_MEMORY_PASSIVE_MAX_FILE_BYTES", "262144")))
     # KV/prompt-cache keep-warm: periodically ping each recently-active workspace's
     # prefix so the provider cache doesn't go cold (cold = next query re-reads the
     # whole prefix at full rate). Interval defaults from provider knowledge; stop
@@ -196,5 +203,5 @@ class Config:
         return {
             "provider": self.provider, "model": self.model, "base_url": self.base_url,
             "auth": "oauth-subscription" if self.use_oauth else ("api-key" if self.api_key else "none"),
-            "metered": self.metered,
+            "metered": self.metered, "passive_ingestion": self.passive_ingestion,
         }

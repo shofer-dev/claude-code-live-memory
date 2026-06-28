@@ -75,18 +75,35 @@ class ChatMessage:
 
 @dataclass
 class FileContext:
-    """A file the Live Memory has read. Manifest only — no content stored.
-    `content_hash == ""` marks it STALE (force re-read / drop on next validate);
-    `deleted` marks it GONE from this path (deleted or moved/renamed away)."""
+    """A file the Live Memory has read. Manifest by default — no content stored;
+    the bytes are re-read on demand. `content_hash == ""` marks it STALE (force
+    re-read / drop on next validate); `deleted` marks it GONE from this path
+    (deleted or moved/renamed away).
+
+    Passive ingestion (FUTURE_DIRECTIONS §1): when the building agent's hook tees a
+    file's current bytes, they are held in `content` so the Live Memory can answer
+    WITHOUT a re-read. `content == ""` is the classic manifest-only entry; a
+    non-empty `content` is an "observed" entry rendered inline. Raw content is
+    in-memory only — never persisted (snapshots stay lean and re-warm from real
+    work) and is distilled into the knowledge ledger when the window compacts."""
     path: str  # relative to workspace
     content_hash: str
     token_estimate: int
     loaded_at: int = field(default_factory=now_ms)
     last_referenced_at: int = field(default_factory=now_ms)
     deleted: bool = False
+    content: str = ""      # teed bytes (in-memory only; "" == manifest-only)
+    observed_at: int = 0   # ms when content was teed (for the invalidate grace guard)
+
+    @property
+    def has_content(self) -> bool:
+        return bool(self.content)
 
     def to_dict(self) -> dict[str, Any]:
-        return vars(self).copy()
+        d = vars(self).copy()
+        d.pop("content", None)      # never persist raw content → lean snapshots
+        d.pop("observed_at", None)  # in-memory grace bookkeeping only
+        return d
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "FileContext":

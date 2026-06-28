@@ -26,6 +26,16 @@ window lean so warm knowledge doesn't reintroduce bloat.
 
 ## 1. Passive (organic) population
 
+> **Status: IMPLEMENTED** (initial cut). Content-carrying hooks (`Read` +
+> `Write|Edit|MultiEdit|NotebookEdit` → `notify.py` tees current bytes) → `/notify`
+> `{paths, contents}` → `WorkspaceState.observe()` upserts a content-bearing file
+> context, rendered inline so the model answers without re-reading; marked current
+> (not stale), wired into the freshness/manifest machinery (decision 2). Raw bytes
+> are in-memory only and distilled into the ledger by compaction **tier 0**
+> (decision 1). Gated by `LIVE_MEMORY_PASSIVE_INGESTION` (default on; off = today's
+> active fallback). See DESIGN.md §Data Flow 3c + §Compaction. **Still open:** the
+> measurement hinge below (warm-vs-cold query cost) and active-read population.
+
 **Idea.** Populate Live Memory not (only) via `ask_live_memory`, but **passively** from
 the building agent's normal `Read`/`Edit`/`Write` I/O. The file contents are already
 flowing; tee a copy into Live Memory so it learns the code as a side effect of real work,
