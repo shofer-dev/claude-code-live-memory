@@ -129,7 +129,14 @@ class Config:
     metered: bool = True  # whether cost is $-metered (API key) vs subscription (rate-limited)
 
     max_context_tokens: int = field(default_factory=lambda: int(os.environ.get("LIVE_MEMORY_MAX_CONTEXT_TOKENS", "128000")))
+    # Compaction hysteresis (high/low watermark): TRIGGER once fill exceeds
+    # `compaction_threshold`, then compact all the way down to `compaction_floor`
+    # (not back to the trigger). The headroom between them is what makes compaction
+    # RARE and BATCHED — the next N questions run against a stable, cache-hit window
+    # instead of re-compacting (and busting the prompt cache) every question. A floor
+    # == threshold reproduces the old thrash-prone behavior.
     compaction_threshold: float = field(default_factory=lambda: float(os.environ.get("LIVE_MEMORY_COMPACTION_THRESHOLD", "0.85")))
+    compaction_floor: float = field(default_factory=lambda: float(os.environ.get("LIVE_MEMORY_COMPACTION_FLOOR", "0.6")))
     directory_tree_fraction: float = field(default_factory=lambda: float(os.environ.get("LIVE_MEMORY_DIRTREE_FRACTION", "0.10")))
     max_iterations: int = field(default_factory=lambda: int(os.environ.get("LIVE_MEMORY_MAX_ITERATIONS", "25")))
     max_queue_size: int = field(default_factory=lambda: int(os.environ.get("LIVE_MEMORY_MAX_QUEUE_SIZE", "100")))

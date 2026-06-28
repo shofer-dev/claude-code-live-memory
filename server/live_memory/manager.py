@@ -116,13 +116,16 @@ async def _distill_observations(ws: "WorkspaceState", window: "ContextWindow", t
 
 
 async def _maybe_compact(ws: "WorkspaceState", window: "ContextWindow") -> None:
-    # Compact down to the SOFT threshold (compaction_threshold, default 0.85) once
-    # the window exceeds it — not the hard max. Tier 0: distill+shed observed file
-    # bytes (passive ingestion). Tier 1: evict re-readable file contexts (LRU).
-    # Tier 2: if that isn't enough, neutrally summarize oldest Q&A.
-    target = int(window.max_context_tokens * window.fill_threshold)
-    if window.estimated_token_count() <= target:
+    # Hysteresis: TRIGGER once over the high watermark (compaction_threshold, 0.85),
+    # then compact all the way down to the low watermark (compaction_floor, 0.6) —
+    # NOT back to the trigger. The headroom keeps compaction rare/batched so the next
+    # questions hit a stable, cached window instead of re-compacting every turn (which
+    # busts the prompt cache — the failure mode passive ingestion otherwise hits when
+    # observations overflow). Tier 0: distill+shed observed file bytes. Tier 1: evict
+    # re-readable file contexts (LRU). Tier 2: neutrally summarize oldest Q&A.
+    if window.estimated_token_count() <= int(window.max_context_tokens * window.fill_threshold):
         return
+    target = int(window.max_context_tokens * window.compaction_floor)
     await _distill_observations(ws, window, target)
     if window.estimated_token_count() <= target:
         return

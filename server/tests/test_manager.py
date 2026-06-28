@@ -271,6 +271,24 @@ def test_parallel_commit_keeps_most_exploring(tmp_cfg):
     assert ws.commit_window(poorer) is False and ws.window is richer         # longer text doesn't win
 
 
+def test_parallel_commit_adopts_linear_compaction(tmp_cfg):
+    # Regression: a net-SHRINKING compaction on a linear (non-raced) fork must commit
+    # in parallel mode. The 'most-exploring wins' tiebreak only applies to genuine
+    # races; using it for a linear update wrongly discards compaction (a compacted
+    # window has fewer tokens), so it would be redone — and never persisted — every
+    # question. This is what made passive ingestion thrash under overflow.
+    tmp_cfg.concurrency = "parallel"
+    ws = make_ws(tmp_cfg, FakeLlm())
+    for i in range(5):
+        ws.window.upsert_file_context(FileContext(f"f{i}.py", "h", token_estimate=1000, last_referenced_at=i))
+    fork = ws.fork_window()                       # tagged with the current window version
+    for i in range(4):                            # simulate compaction → fork is much smaller
+        fork.remove_file_context(f"f{i}.py")
+    assert fork.estimated_token_count() < ws.window.estimated_token_count()
+    assert ws.commit_window(fork) is True         # adopted despite being smaller (linear update)
+    assert ws.window is fork
+
+
 @pytest.mark.asyncio
 async def test_parallel_fork_join_keeps_most_exploring_end_to_end(tmp_cfg):
     import json as _json

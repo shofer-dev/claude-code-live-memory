@@ -87,6 +87,24 @@ async def test_compaction_distills_observations_into_ledger_and_frees_budget(tmp
 
 
 @pytest.mark.asyncio
+async def test_compaction_hysteresis_compacts_to_floor_not_threshold(tmp_cfg):
+    # Compaction TRIGGERS at the high watermark (threshold) but compacts all the way
+    # DOWN to the low watermark (floor) — leaving headroom so it doesn't re-fire (and
+    # bust the prompt cache) on the next question. Regression guard for the overflow
+    # thrash that made passive ingestion 10x costlier before hysteresis.
+    from live_memory.manager import _maybe_compact
+    tmp_cfg.max_context_tokens = 1000
+    tmp_cfg.compaction_threshold = 0.85   # trigger above 850
+    tmp_cfg.compaction_floor = 0.5        # but compact down to 500
+    ws = make_ws(tmp_cfg, FakeLlm())
+    for i in range(9):                     # 9 × 100 = 900 tokens (over the 850 trigger)
+        ws.window.upsert_file_context(FileContext(f"f{i}.py", "h", token_estimate=100, last_referenced_at=i))
+    await _maybe_compact(ws, ws.window)
+    assert ws.window.estimated_token_count() <= 500   # to the FLOOR, not back to 850
+    assert ws.window.file_contexts                      # but not emptied (LRU, just enough)
+
+
+@pytest.mark.asyncio
 async def test_observed_content_is_not_persisted(tmp_cfg):
     # Raw teed bytes stay in-memory; the snapshot keeps only the lean manifest, and
     # the entry survives reload only because the on-disk file still hashes the same.

@@ -42,8 +42,25 @@ window lean so warm knowledge doesn't reintroduce bloat.
 > per run), at **−3% to −21% cheap-side cost** (always cheaper, net of the ~10k-token
 > observation bloat — the cache amortizes it) and **~30–40% lower latency**. So a
 > passively-warmed window makes `ask_live_memory` cheaper net of the bloat, and
-> eliminates re-reading on the warm path. **Still open:** the premium-side win (the
-> *building* agent not reading — needs the full `claude -p` A/B harness) and
+> eliminates re-reading on the warm path.
+>
+> **Overflow regime — exercised + two bugs fixed** (`benchmark/harness/passive_compaction.py`:
+> 22 questions, 20 files teed progressively into a deliberately small 24k window so
+> observations + Q&A overflow and force compaction; includes late "survival" re-probes
+> of early files long since distilled). It surfaced two real bugs the fits-regime hid:
+> (1) **compaction thrash** — compacting back to the *trigger* re-fired every question
+> and busted the prompt cache → fixed with a high/low **watermark** (`compaction_floor`,
+> DESIGN.md §Compaction); (2) **compaction never committed in parallel mode** — the
+> "most-exploring fork wins" tiebreak discarded the (smaller) compacted window every
+> time → fixed with optimistic **window versioning** (linear updates always commit;
+> tiebreak only on genuine races). Same benchmark across the fixes: WARM compactions
+> 18→18→**3**, WARM cost +889%→+443%→**+95%** vs COLD. **Survival recall is perfect**
+> throughout — every re-probe of a distilled file answered correctly from the ledger
+> with 0 reads (COLD had to re-read). Remaining gap: when the working set **exceeds**
+> the window, WARM still carries a fuller context per call than COLD's lazy manifest,
+> so cheap-side cost is ~2× (both pennies on Haiku) — this is precisely the §2
+> (retrieval/projection) lever: hold a query-relevant projection, not the whole set.
+> **Still open:** §2 projection, the premium-side win (full `claude -p` A/B), and
 > active-read population.
 
 **Idea.** Populate Live Memory not (only) via `ask_live_memory`, but **passively** from

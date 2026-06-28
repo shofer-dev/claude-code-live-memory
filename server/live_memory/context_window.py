@@ -19,13 +19,16 @@ TRUNCATED_MESSAGE_PAIR_TOKEN_COST = 100
 
 
 class ContextWindow:
-    def __init__(self, max_context_tokens: int, fill_threshold: float = 0.85):
+    def __init__(self, max_context_tokens: int, fill_threshold: float = 0.85,
+                 compaction_floor: float = 0.6):
         self.messages: list[ChatMessage] = []
         self.file_contexts: list[FileContext] = []
         self.knowledge_ledger: str = ""
         self.max_context_tokens = max_context_tokens
-        self.fill_threshold = fill_threshold
+        self.fill_threshold = fill_threshold       # high watermark: compaction TRIGGER
+        self.compaction_floor = compaction_floor   # low watermark: compact DOWN to this
         self._evicted_tokens = 0
+        self._base_version = 0  # the workspace window-version this fork was taken from
 
     # ── accounting ──
     def estimated_token_count(self) -> int:
@@ -50,7 +53,7 @@ class ContextWindow:
         """A deep, independent copy. In the parallel model each in-flight question
         runs against its own fork, so concurrent questions can't corrupt one
         another; the richest fork is committed back (see `exploration_score`)."""
-        c = ContextWindow(self.max_context_tokens, self.fill_threshold)
+        c = ContextWindow(self.max_context_tokens, self.fill_threshold, self.compaction_floor)
         c.messages = copy.deepcopy(self.messages)
         c.file_contexts = copy.deepcopy(self.file_contexts)
         c.knowledge_ledger = self.knowledge_ledger

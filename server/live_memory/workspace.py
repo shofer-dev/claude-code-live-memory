@@ -31,7 +31,8 @@ class WorkspaceState:
         self.cfg = cfg
         self.llm = llm
         self.summarizer = summarizer
-        self.window = ContextWindow(cfg.max_context_tokens, cfg.compaction_threshold)
+        self.window = ContextWindow(cfg.max_context_tokens, cfg.compaction_threshold, cfg.compaction_floor)
+        self._window_version = 0  # bumped on each committed window swap (optimistic concurrency)
         self.queue = QuestionQueue(cfg.max_queue_size, cfg.max_parallel_queries if cfg.is_parallel else 1)
         self.store = ConversationStore(cwd, cfg.snapshot_path(cwd))
         self.executor = ToolExecutor(cwd)
@@ -57,20 +58,33 @@ class WorkspaceState:
         return self._commit_lock
 
     def fork_window(self) -> ContextWindow:
-        """The window a question runs against. Parallel: an independent clone, so
-        concurrent questions don't corrupt each other. Serial: the live window
-        itself (mutated in place, as before) — the queue admits one at a time."""
-        return self.window.clone() if self.cfg.is_parallel else self.window
+        """The window a question runs against. Parallel: an independent clone tagged
+        with the current window version, so concurrent questions don't corrupt each
+        other. Serial: the live window itself (mutated in place) — the queue admits
+        one at a time."""
+        if self.cfg.is_parallel:
+            clone = self.window.clone()
+            clone._base_version = self._window_version
+            return clone
+        return self.window
 
     def commit_window(self, candidate: ContextWindow) -> bool:
         """Adopt a finished question's window. Serial: it IS the live window → keep.
-        Parallel: replace the committed window only if this fork explored more of
-        the codebase (longest/most-exploring wins) — otherwise its work is dropped
-        (the caller still got its answer)."""
+        Parallel: a LINEAR update (no other question committed since this fork was
+        taken) is always adopted — including a net-shrinking COMPACTION (a compacted
+        window has fewer tokens, so the 'most-exploring wins' tiebreak would wrongly
+        discard it, redoing — and never persisting — compaction every question). The
+        tiebreak applies only to a genuine RACE (a concurrent fork already committed),
+        where comparing how much each explored is the right call."""
         if candidate is self.window:
             return True
-        if candidate.exploration_score() > self.window.exploration_score():
+        if candidate._base_version == self._window_version:        # linear → adopt (incl. compaction)
             self.window = candidate
+            self._window_version += 1
+            return True
+        if candidate.exploration_score() > self.window.exploration_score():  # race → most-exploring wins
+            self.window = candidate
+            self._window_version += 1
             return True
         return False
 
@@ -171,6 +185,7 @@ class WorkspaceState:
         self.summarizer = summarizer
         self.window.max_context_tokens = cfg.max_context_tokens
         self.window.fill_threshold = cfg.compaction_threshold
+        self.window.compaction_floor = cfg.compaction_floor
 
     def stats(self) -> dict[str, Any]:
         u = self.window.get_usage()
