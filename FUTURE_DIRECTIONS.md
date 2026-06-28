@@ -33,8 +33,18 @@ window lean so warm knowledge doesn't reintroduce bloat.
 > (not stale), wired into the freshness/manifest machinery (decision 2). Raw bytes
 > are in-memory only and distilled into the ledger by compaction **tier 0**
 > (decision 1). Gated by `LIVE_MEMORY_PASSIVE_INGESTION` (default on; off = today's
-> active fallback). See DESIGN.md §Data Flow 3c + §Compaction. **Still open:** the
-> measurement hinge below (warm-vs-cold query cost) and active-read population.
+> active fallback). See DESIGN.md §Data Flow 3c + §Compaction.
+>
+> **Measurement hinge — answered YES** (`benchmark/harness/passive_hinge.py`, Haiku,
+> 5 understanding questions over 5 files, 3 reps). WARM (files teed via `/notify`
+> before the questions) vs COLD (today's behavior): WARM answered **every** question
+> with **0 tool round-trips and 0 file reads** (COLD: 10–11 tool calls, 6–7 reads
+> per run), at **−3% to −21% cheap-side cost** (always cheaper, net of the ~10k-token
+> observation bloat — the cache amortizes it) and **~30–40% lower latency**. So a
+> passively-warmed window makes `ask_live_memory` cheaper net of the bloat, and
+> eliminates re-reading on the warm path. **Still open:** the premium-side win (the
+> *building* agent not reading — needs the full `claude -p` A/B harness) and
+> active-read population.
 
 **Idea.** Populate Live Memory not (only) via `ask_live_memory`, but **passively** from
 the building agent's normal `Read`/`Edit`/`Write` I/O. The file contents are already

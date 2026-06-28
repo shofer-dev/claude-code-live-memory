@@ -177,11 +177,15 @@ def build_server(cfg: Config | None = None) -> FastMCP:
         event = body.get("event", "")  # FileChanged: change | add | unlink
         cwd = body.get("cwd") or os.getcwd()
         contents = body.get("contents") or {}  # passive ingestion: {path: file content}
-        ws = registry.existing(cwd)
-        if ws is None:
-            return JSONResponse({"ok": True, "applied": 0, "note": "workspace not loaded"})
         passive = registry.cfg.passive_ingestion
         cap = registry.cfg.passive_max_file_bytes
+        # Passive observations LAZY-LOAD the workspace: the agent's own I/O should warm
+        # a repo even before its first query. Other change events keep the cheap
+        # existing()-only path (don't spin up a workspace for arbitrary file churn).
+        has_content = passive and isinstance(contents, dict) and any(isinstance(v, str) for v in contents.values())
+        ws = await registry.get(cwd) if has_content else registry.existing(cwd)
+        if ws is None:
+            return JSONResponse({"ok": True, "applied": 0, "note": "workspace not loaded"})
         applied = 0
         for p in body.get("paths") or []:
             rel = os.path.relpath(p, cwd) if os.path.isabs(p) else p
