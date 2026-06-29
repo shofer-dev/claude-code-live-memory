@@ -127,6 +127,46 @@ from real work for free). Consistent with the earlier K=12 run (−42% premium, 
 the edit-bound regime remains break-even (see above) — Live Memory makes *understanding* cheaper,
 not *execution*.
 
+## COMPOUNDING SEQUENCE A/B — does accumulation rescue edit-bound work?
+
+The open question from the single-feature runs: over a *sequence* of features, does the
+with-arm's accumulating memory (now also warmed for free by passive ingestion) compound
+into a win where one feature couldn't? Harness: `harness/run_sequence.sh` — 4 read-only
+tools added one per feature (`count_lines → count_chars → count_bytes → count_words`),
+**cold agent per feature**, **accumulating** pinned worktree, with-arm's Live Memory
+persists across the whole sequence; without-arm re-explores each time. 1 sequence rep,
+**8/8 features accepted** (tsc green + tool wired in the schema). `results/sequence/`.
+
+| feature | WO read_tok | WI read_tok | WI lm_calls | WO prem$ | WI prem$ |
+|---|---|---|---|---|---|
+| count_lines | 33,122 | 22,978 | 1 | 1.031 | 0.987 |
+| count_chars | 15,562 | 24,052 | **0** | 0.494 | 0.578 |
+| count_bytes | 26,065 | 2,473 | 1 | 0.599 | 0.380 |
+| count_words | 13,349 | 12,466 | 1 | 0.507 | 0.425 |
+| **cumulative** | **88,098** | **61,969 (−30%)** | | **2.63** | **2.37 (−10%)** |
+
+- read_tok (premium codebase reading): **−30%** cumulative.
+- premium $ (Sonnet, imputed): **−10%** cumulative.
+- cheap-side (Haiku, incl. one cold warm-up): **+$0.35**.
+- **NET total $ (premium + cheap): without 2.63 vs with 2.72 = +3% — break-even.**
+- turns 136 vs 138 (identical); acceptance 4/4 both arms.
+
+**Conclusion: accumulation does NOT flip edit-bound feature work into a win — it stays
+break-even, confirming the structural finding.** Why: (1) feature work is execution-bound —
+the agent must read the exact files it will edit, so it reads regardless of Live Memory
+(the with-arm even made **0** LM calls on one feature and read 24k anyway); turns are driven
+by the edit-check-iterate loop, not understanding. (2) The modest read-offload (−30%) and
+premium dip (−10%) are real but get eaten by the cheap-side warm-up, netting +3%. (3) LM
+usage is inconsistent on edit tasks (lm_calls 1/0/1/1) — the agent doesn't lean on it when
+it's editing. Steady-state (already-warm, no warm-up) would be ~−10% net, but only on the
+premium dip, which is itself within the (large, single-rep) cache-read variance.
+
+**This sharpens the value proposition:** Live Memory's win is **understanding-bound work**
+(−42% premium, proven, low-variance) — *not* execution, and accumulation across an
+edit-bound sequence does not change that. The lever for edit-heavy sequences is **fewer
+turns**, which Live Memory doesn't touch. (Caveat: 1 sequence rep; premium-$ is cache-read-
+noisy — the read_tok mechanism is the reliable signal.)
+
 ## 1. Live Memory prefix-cache fix (verified, landed)
 
 The cheap-model cost of every query was dominated by the **directory tree** (~30k

@@ -1,0 +1,9 @@
+arm,fidx,name,turns,read_calls,read_tok,lm_calls,lm_tok,edit_calls,pin,pout,pcr,pcw,status,api_fail,accept,ch_in,ch_cr,ch_cw,ch_out,ch_inv
+without,0,count_lines,43,18,33122,0,0,13,1175,8540,2181856,65190,complete,no,0|yes,,,,,
+without,1,count_chars,29,10,15562,0,0,12,26,5578,922912,35423,complete,no,0|yes,,,,,
+without,2,count_bytes,31,12,26065,0,0,13,25,5790,1090648,49201,complete,no,0|yes,,,,,
+without,3,count_words,33,13,13349,0,0,13,1085,6683,925575,33484,complete,no,0|yes,,,,,
+with,0,count_lines,46,18,22978,1,2452,12,45,9153,2116955,57063,complete,no,0|yes,42602,560438,41892,5045,1
+with,1,count_chars,27,9,24052,0,0,12,22,5487,1058729,47497,complete,no,0|yes,0,0,0,0,0
+with,2,count_bytes,33,8,2473,1,1987,11,26,6597,640203,23764,complete,no,0|yes,18688,0,37383,4471,1
+with,3,count_words,32,12,12466,1,1578,12,23,6396,659556,34933,complete,no,0|yes,154,29650,56329,1929,1
