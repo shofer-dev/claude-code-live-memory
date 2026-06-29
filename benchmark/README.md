@@ -1,7 +1,20 @@
 # Live Memory — token-reduction benchmark
 
-**Status: plan finalized; pilot pending.** This is the living record — the
-methodology now, the results later (§9).
+**Status: runs executed; findings in [`results/RESULTS.md`](results/RESULTS.md).**
+This is the living record — the methodology below (§1–§7), the headline findings in
+§9, and the full evidence in `results/`. Three task regimes have been run end-to-end
+(premium-side `claude -p` A/B), plus cheap-side passive-ingestion benchmarks:
+
+| regime | harness | headline |
+|---|---|---|
+| **understanding-bound** (read-only trace) | `harness/run_understanding.sh` | **−42% premium $/turn, −97% read tokens** — the win |
+| **edit-bound, single feature** | `harness/run_parallel.sh` | break-even (+1.4%) — execution-bound |
+| **edit-bound, compounding sequence** | `harness/run_sequence.sh` | break-even (+3% net) — accumulation doesn't rescue it |
+| passive ingestion, fits window (cheap-side) | `harness/passive_hinge.py` | −21%, 0 re-reads |
+| passive ingestion, overflow (cheap-side) | `harness/passive_compaction.py` | surfaced+fixed 2 compaction bugs |
+
+**One-line takeaway:** Live Memory makes *understanding* cheaper and far more
+predictable, not *execution*; the win is on comprehension-heavy work.
 
 ## 1. What we measure (and what we claim)
 
@@ -214,12 +227,45 @@ with-arm's own file tools to force usage — that confounds the comparison.
 - [x] Live Memory deployed (systemd); `/live-memory-empty` added; `/stats` exposes
       per-type token totals.
 - [x] Harness feasibility validated (`claude -p --mcp-config` smoke).
-- [ ] Cheap model = **Haiku via Claude subscription** (OAuth) for the runs.
-- [ ] **Pilot**: convert one tool (F1), 1×1, from shofer `32cdefc` → token delta.
-- [ ] If positive: full **F1 → F4** sequence, N runs, on the CLI harness.
-- [ ] Fill §9.
+- [x] Cheap model = **Haiku via Claude subscription** (OAuth) for the runs.
+- [x] **Pilot**: lead feature (`count_lines`), single + K=20 replicates from `32cdefc`.
+- [x] **Mechanism metric + per-turn normalization** (`harness/analyze.py`) — the
+      low-variance signal, since total-$ is swamped by `O(turns²)` cache-read churn.
+- [x] **Understanding-bound A/B** (the regime where it wins) — `run_understanding.sh`.
+- [x] **Compounding sequence A/B** (4 read-only tools, accumulating worktree) —
+      `run_sequence.sh`.
+- [x] **Passive-ingestion (cheap-side) benchmarks** — `passive_hinge.py` (fits window)
+      and `passive_compaction.py` (overflow → drove two compaction fixes).
+- [x] §9 filled; full evidence in [`results/RESULTS.md`](results/RESULTS.md).
+- [ ] More reps of the sequence A/B (1 rep so far; premium-$ is cache-read-noisy).
+- [ ] An *understanding-bound* sequence (the regime where compounding should show).
 
 ## 9. Results
 
-_To be filled after runs: per-feature and cumulative premium-token reduction,
-cost, the with/without divergence chart, and links to `runs/`._
+Full findings, tables, and raw evidence: **[`results/RESULTS.md`](results/RESULTS.md)**.
+Headlines (imputed at published rates; subscription billing → `$` is notional):
+
+- **Understanding-bound (the win), 6 reps, 6/6 correct both arms:** the building agent's
+  codebase-reading premium tokens drop **−97%** (38.7k → 1.3k); premium **$/turn −42%**,
+  total **$ −56%**, and cost **variance collapses** (without-arm ±735k tok vs with-arm
+  ±59k — it no longer spirals into long re-reading loops). Reproduces an earlier K=12
+  run (−42% premium, −44% cache-read).
+- **Edit-bound, single feature (K=20):** reading offloads **−65%** but premium is
+  **break-even (+1.4%)** — read file content is <2% of the premium footprint (dominated
+  by conversation/edits re-read every turn); turns are driven by the edit loop, which
+  Live Memory doesn't touch.
+- **Edit-bound, compounding sequence (4 features):** accumulation does **not** rescue it —
+  cumulative read_tok −30%, premium $ −10%, but **net +3% (break-even)** once the cheap
+  warm-up is counted; the agent even skips Live Memory on some edit features and reads
+  anyway. Confirms: Live Memory helps *understanding*, not *execution*.
+- **Passive ingestion (cheap-side):** **−21%** with 0 re-reads when the working set fits
+  the window; under overflow it surfaced and led to fixing two real compaction bugs
+  (hysteresis watermark + parallel-commit versioning), after which survival recall is
+  perfect and cost is bounded.
+
+**Conditions for a real net win (both required):** (1) the task is *understanding-bound*
+(premium reading to offload — edit-bound = no premium to move), and (2) the cheap model's
+cost stays under the premium it saves (~$0.15) — met by a near-free/local model **or a
+hot memory**, which is what passive (organic) population now provides for free from real
+work. See [`../FUTURE_DIRECTIONS.md`](../FUTURE_DIRECTIONS.md) for the next levers
+(retrieval/projection to keep the window lean as the store grows).
