@@ -27,9 +27,15 @@ A **cold** memory confabulates specific constants it never read — every wrong 
 answered **everything correctly with zero reads and zero hallucination**. Negatives were
 3/3 both arms (it did not invent a Redis backend / a write capability / a `model` param).
 **Implication for launch:** the quality claim holds *for a warmed memory* (real usage);
-the cold-start hallucination risk is real → mitigations: warm via passive ingestion / an
-initial explore query, and/or push the system prompt to *verify exact values by reading*
-rather than answering constants from priors. (1 rep, LLM judge — spot-checked.)
+the cold-start hallucination risk is real. **Prompt hardening alone did NOT fix it** — adding
+an explicit "verify exact values by reading, never answer constants from priors" rule to the
+system prompt left cold at 67% (ungrounded 20%→27%, within 1-rep noise): Haiku keeps answering
+specifics with 0 reads despite the instruction. **The dependable mitigation is warmth** —
+passive ingestion (automatic in real use) or an initial explore query — which is exactly what
+takes it to 100%/0-hallucination. So: don't demo/benchmark on a stone-cold memory; lead the
+quality claim with "warm." (Stronger structural options if needed: force a read on a cold
+workspace when a question asks for an exact value and no relevant file has been observed.)
+(1 rep per arm, LLM judge — spot-checked.)
 
 **#2 Freshness after edits (does it reflect the current code?).** 3/4 fresh:
 
