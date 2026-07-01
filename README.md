@@ -1,12 +1,47 @@
 # Live Memory — Claude Code plugin
 
-A persistent, long-context, **read-only** codebase Q&A companion for Claude Code.
-A cheap large-context model accumulates knowledge of a repository across sessions;
-agents ask it questions via the `ask_live_memory` MCP tool instead of re-reading
-the whole codebase.
+**A cheap, always-on model that learns your repo — so your agent stops re-reading it.**
+A separate large-context model runs as a long-lived MCP server and *accumulates* knowledge of your
+codebase across sessions; your agent asks it via one **read-only** tool, `ask_live_memory`, instead
+of re-reading files. It **learns passively** from your agent's own reads/edits (teed via hooks — no
+extra reading) and stays current as the repo changes.
 
-> Design: [`DESIGN.md`](./DESIGN.md) · Testing: [`TESTING.md`](./TESTING.md).
-> Standalone — self-contained MCP server with no dependency on any other project.
+> **A/B on a real repo (understanding-heavy work):** the building (premium) model offloaded **~97% of
+> its codebase-reading tokens** and cost **~42% less per turn**, with *lower cost variance*.
+> Edit/execution-heavy work is roughly break-even. Full numbers: [`benchmark/results/RESULTS.md`](./benchmark/results/RESULTS.md).
+
+Part of the **shofer** Claude Code plugin family (with
+[slang-workflows](https://github.com/shofer-dev/claude-code-slang-orchestrator)).
+Design: [`DESIGN.md`](./DESIGN.md) · Testing: [`TESTING.md`](./TESTING.md). Standalone — no dependency
+on any other project.
+
+## Quickstart
+
+live-memory is an **HTTP MCP server you run once** (a singleton that serves every Claude Code session)
+plus a plugin that registers `ask_live_memory`, the hooks, and the slash commands. **Start the server
+first** — Claude Code only *connects* to it (it never spawns it), so if it isn't running you'll get a
+connection error.
+
+**1 — Start the server** (zero-config on a Claude subscription → Haiku; no API key needed):
+
+```bash
+git clone https://github.com/shofer-dev/claude-code-live-memory
+cd claude-code-live-memory/deploy && ./install-service.sh   # venv + user systemd service, auto-starts on boot
+# …or just run it in a terminal:
+#   cd claude-code-live-memory/server && pip install -e . && python -m live_memory
+```
+
+**2 — Install the plugin** (inside a Claude Code session):
+
+```
+/plugin marketplace add shofer-dev/claude-code-live-memory
+/plugin install live-memory@shofer
+```
+
+Ask your agent a whole-repo question — it'll call `ask_live_memory` instead of reading files.
+`/live-memory-stats` shows accumulated knowledge + cost · `/live-memory-config` switches
+model/provider · `/live-memory-empty` wipes memory. Providers, systemd, workspaces, and concurrency
+are detailed below.
 
 ## Shape
 
@@ -14,7 +49,7 @@ the whole codebase.
 live-memory/
 ├── .claude-plugin/plugin.json     # plugin manifest
 ├── .mcp.json                      # registers the server (type:http, explicit timeout)
-├── hooks/                         # PostToolUse(Write|Edit) + FileChanged → notify the server
+├── hooks/                         # PostToolUse(Read|Write|Edit|…) + FileChanged → TEE file content (passive learning)
 │   ├── hooks.json
 │   └── notify.py
 ├── skills/live-memory/SKILL.md    # tells the agent when/why to call ask_live_memory
@@ -59,9 +94,12 @@ live-memory/
   (with `cache_control`) and **OpenAI-compatible** (DeepSeek/OpenAI/gateways).
   **Zero-config**: with no key but a Claude subscription, it uses the subscription
   OAuth token (auto-refreshed) on Haiku.
+- **Passive (organic) learning**: PostToolUse/FileChanged hooks **tee the content**
+  of the files your agent reads/edits into the memory, so it warms up for free from
+  real work; `ask_live_memory` is the active fallback for anything unseen.
 - **Append-only window between compactions**; compaction = **batched neutral
-  summarization** (file contexts truncate+reload; Q&A summarized into a
-  query-agnostic knowledge ledger) — never front-truncation.
+  summarization** with a high/low-watermark (rare, batched) — observed files + Q&A
+  distilled into a query-agnostic knowledge ledger — never front-truncation.
 - **Two-tier timeout**: `ask_live_memory(question, cwd, timeout)` — the soft
   `timeout` informs the model's budget and yields a best-effort answer before the
   hard `.mcp.json` MCP timeout.
