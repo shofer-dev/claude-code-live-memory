@@ -331,6 +331,7 @@ async def test_parallel_cumulative_cost_sums_all_forks(tmp_cfg):
     import json as _json
     tmp_cfg.concurrency = "parallel"
     tmp_cfg.metered = True  # so $ isn't zeroed
+    tmp_cfg.force_explore_when_cold = False  # this test scripts one no-tool answer per fork
 
     class CostLlm:
         async def chat(self, system, messages, tools=None, max_tokens=4096, system_volatile=""):
@@ -384,6 +385,7 @@ async def test_keep_warm_eligibility_and_warm(tmp_cfg):
 
 @pytest.mark.asyncio
 async def test_persistence_restores(tmp_cfg):
+    tmp_cfg.force_explore_when_cold = False  # scripts a single no-tool answer
     ws = make_ws(tmp_cfg, FakeLlm([ChatResult(answer="forty-two")]))
     await process_question(ws, "the answer?", far_deadline())
     ws2 = WorkspaceState(SERVER_DIR, tmp_cfg, FakeLlm(), Summarizer(FakeLlm()))

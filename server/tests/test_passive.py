@@ -14,7 +14,7 @@ from conftest import SERVER_DIR, far_deadline, make_ws, FakeLlm
 
 from live_memory.config import Config
 from live_memory.manager import _build_system, _maybe_compact, process_question
-from live_memory.models import ChatResult, FileContext, now_ms
+from live_memory.models import ChatResult, FileContext, ToolCall, now_ms
 from live_memory.summarizer import Summarizer
 from live_memory.workspace import OBSERVE_INVALIDATE_GRACE_MS, WorkspaceState
 
@@ -84,6 +84,43 @@ async def test_compaction_distills_observations_into_ledger_and_frees_budget(tmp
     assert ws.window.knowledge_ledger == "LEDGER: auth lives in svc/auth.py"
     # at least some observations downgraded to manifest-only (content shed)
     assert any(not fc.has_content for fc in ws.window.file_contexts)
+
+
+@pytest.mark.asyncio
+async def test_cold_memory_forces_exploration_before_answering(tmp_cfg):
+    # A cold memory that tries to answer with NO tool calls is rejected once and forced to
+    # explore, so it grounds instead of confabulating from priors.
+    llm = FakeLlm([
+        ChatResult(answer="the default is 10000 tokens"),                                  # guess, no tools
+        ChatResult(tool_calls=[ToolCall("t1", "Read", '{"file_path": "live_memory/config.py"}')]),
+        ChatResult(answer="grounded from config.py"),
+    ])
+    ws = make_ws(tmp_cfg, llm)                       # fresh window → is_cold()
+    assert ws.window.is_cold() is True
+    r = await process_question(ws, "what is the default max_context_tokens?", far_deadline())
+    assert r.answer == "grounded from config.py"      # the guess was NOT accepted
+    assert llm.chat_calls == 3 and r.files_read == 1
+
+
+@pytest.mark.asyncio
+async def test_warm_memory_answers_without_forced_exploration(tmp_cfg):
+    # Warm memory (observed content in-window) is NOT cold → the direct answer is accepted,
+    # no forced read (preserves the 0-read win).
+    llm = FakeLlm([ChatResult(answer="128000, from the observed file")])
+    ws = make_ws(tmp_cfg, llm)
+    ws.observe("live_memory/config.py", "max_context_tokens = 128000")
+    assert ws.window.is_cold() is False
+    r = await process_question(ws, "what is max_context_tokens?", far_deadline())
+    assert r.answer == "128000, from the observed file" and llm.chat_calls == 1 and r.files_read == 0
+
+
+@pytest.mark.asyncio
+async def test_cold_guard_can_be_disabled(tmp_cfg):
+    tmp_cfg.force_explore_when_cold = False
+    llm = FakeLlm([ChatResult(answer="a guess")])
+    ws = make_ws(tmp_cfg, llm)
+    r = await process_question(ws, "what is X?", far_deadline())
+    assert r.answer == "a guess" and llm.chat_calls == 1
 
 
 @pytest.mark.asyncio

@@ -157,6 +157,11 @@ class Config:
     # clean A/B baseline. The server-side cap truncates any single teed file.
     passive_ingestion: bool = field(default_factory=lambda: _truthy(os.environ.get("LIVE_MEMORY_PASSIVE_INGESTION", "true")))
     passive_max_file_bytes: int = field(default_factory=lambda: int(os.environ.get("LIVE_MEMORY_PASSIVE_MAX_FILE_BYTES", "262144")))
+    # Cold-start grounding guard: if the memory has no basis to answer (no observed file
+    # content in-window and an ~empty ledger) and the model tries to answer WITHOUT
+    # consulting the code, force it to explore (Grep/Read) once before answering — a cheap
+    # cold model otherwise confabulates exact values from priors. Warm memory is untouched.
+    force_explore_when_cold: bool = field(default_factory=lambda: _truthy(os.environ.get("LIVE_MEMORY_FORCE_EXPLORE_WHEN_COLD", "true")))
     # KV/prompt-cache keep-warm: periodically ping each recently-active workspace's
     # prefix so the provider cache doesn't go cold (cold = next query re-reads the
     # whole prefix at full rate). Interval defaults from provider knowledge; stop

@@ -191,6 +191,7 @@ async def process_question(ws: "WorkspaceState", question: str, deadline: float)
     tool_calls_total = files_read_total = 0
     cost = CostSnapshot()
     timed_out = False
+    forced_explore = False  # cold-start guard: force one exploration before answering
 
     for _ in range(ws.cfg.max_iterations):
         if loop.time() >= deadline:
@@ -205,6 +206,21 @@ async def process_question(ws: "WorkspaceState", question: str, deadline: float)
         cost.add(result.cost)
 
         if not result.tool_calls:
+            # Cold-start grounding guard: the memory has no basis to answer (no observed file
+            # content, ~empty ledger) and the model answered WITHOUT consulting the code —
+            # make it explore instead of guessing from priors. Fires at most once per
+            # question; warm memory (content in-window) and a non-empty ledger are untouched.
+            if (ws.cfg.force_explore_when_cold and not forced_explore
+                    and tool_calls_total == 0 and window.is_cold() and loop.time() < deadline):
+                forced_explore = True
+                if result.answer:
+                    conversation.append({"role": "assistant", "content": result.answer})
+                conversation.append({"role": "user", "content": (
+                    "[You have no stored knowledge of this codebase covering that question, and you "
+                    "answered without consulting the code. Do NOT answer from general/prior knowledge "
+                    "or by guessing from file/symbol names. Use Grep/Glob/find_paths to locate the "
+                    "relevant file(s), Read them, then answer grounded in what you actually read.]")})
+                continue
             answer = result.answer
             break
         tool_calls_total += len(result.tool_calls)

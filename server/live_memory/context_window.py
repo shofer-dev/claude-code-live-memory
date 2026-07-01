@@ -149,6 +149,15 @@ class ContextWindow:
     def has_file(self, path: str) -> bool:
         return any(fc.path == path for fc in self.file_contexts)
 
+    def is_cold(self, min_ledger_chars: int = 160) -> bool:
+        """True when there's no grounding to answer FROM: no observed file content in the
+        window and an essentially-empty knowledge ledger. Prior Q&A is deliberately
+        excluded (it may itself be a guess). Used to force exploration before a cold, cheap
+        model answers exact values from priors."""
+        if any(fc.has_content for fc in self.file_contexts):
+            return False
+        return len(self.knowledge_ledger.strip()) < min_ledger_chars
+
     # ── messages ──
     def append_message(self, m: ChatMessage) -> None:
         self.messages.append(m)

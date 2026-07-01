@@ -17,7 +17,8 @@ finding is that **accuracy is coupled to warmth**:
 
 | memory state | correct | hallucinated (ungrounded) | answered with 0 reads |
 |---|---|---|---|
-| **COLD** (just installed, unwarmed) | 10/15 (67%) | 3/15 (20%) | 10/15 |
+| COLD, no guard (old behavior) | 10/15 (67%) | 3/15 (20%) | 10/15 |
+| **COLD + explore-guard** (shipped, default on) | **15/15 (100%)** | **0/15 (0%)** | 1/15 (reads to ground) |
 | **WARM** (files passively ingested — the normal in-use state) | **15/15 (100%)** | **0/15 (0%)** | 15/15 |
 
 A **cold** memory confabulates specific constants it never read — every wrong answer
@@ -28,14 +29,20 @@ answered **everything correctly with zero reads and zero hallucination**. Negati
 3/3 both arms (it did not invent a Redis backend / a write capability / a `model` param).
 **Implication for launch:** the quality claim holds *for a warmed memory* (real usage);
 the cold-start hallucination risk is real. **Prompt hardening alone did NOT fix it** — adding
-an explicit "verify exact values by reading, never answer constants from priors" rule to the
-system prompt left cold at 67% (ungrounded 20%→27%, within 1-rep noise): Haiku keeps answering
-specifics with 0 reads despite the instruction. **The dependable mitigation is warmth** —
-passive ingestion (automatic in real use) or an initial explore query — which is exactly what
-takes it to 100%/0-hallucination. So: don't demo/benchmark on a stone-cold memory; lead the
-quality claim with "warm." (Stronger structural options if needed: force a read on a cold
-workspace when a question asks for an exact value and no relevant file has been observed.)
-(1 rep per arm, LLM judge — spot-checked.)
+a "verify exact values by reading" rule to the system prompt left cold at 67% (ungrounded
+20%→27%): Haiku kept answering specifics with 0 reads despite the instruction (reverted).
+
+**FIXED structurally (shipped, default on): `force_explore_when_cold`.** When the memory has no
+grounding (`ContextWindow.is_cold()` — no observed file content in-window and an ~empty ledger)
+and the model tries to answer with **zero tool calls**, the loop rejects that first answer once
+and forces it to explore (Grep/Read) before answering. Result: **cold 67%→100%, hallucination
+20%→0%** — the cold memory now reads to ground (avg ~1.2 reads/q) instead of guessing from
+priors. Warm memory (content in-window) is untouched → still 100% at 0 reads. So the honest
+cost/quality picture is: **warm = accurate & free; cold = accurate but pays a read** (which is
+the whole point of a memory that explores). Env: `LIVE_MEMORY_FORCE_EXPLORE_WHEN_COLD`. Known
+limit: `is_cold` is coarse (any observed content → "not cold"), so a *partially*-warm memory can
+still answer an un-observed file's specifics from priors; broad passive ingestion covers that in
+practice. (1 rep per arm, LLM judge — spot-checked.)
 
 **#2 Freshness after edits (does it reflect the current code?).** 3/4 fresh:
 
