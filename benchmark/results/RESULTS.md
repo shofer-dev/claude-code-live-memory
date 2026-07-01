@@ -6,6 +6,66 @@ token ledgers), `*.accept` (acceptance), `cheap.txt` (/stats deltas), `results.c
 **imputed** at published API rates (Sonnet building model, Haiku Live Memory model);
 billing is via subscription, so `$` is notional, not invoiced.
 
+## PRE-LAUNCH: quality, freshness, persistence (the claims users will attack)
+
+Token savings say nothing about whether answers are *right*, *current*, or *survive a
+restart*. Three harnesses target exactly those (`harness/accuracy.py`, `freshness.py`,
+`steady_state.py`; LM = Haiku via subscription; accuracy graded by an LLM judge).
+
+**#1 Accuracy (15 author-verified Q&A incl. 3 negative/"not present" questions).** The
+finding is that **accuracy is coupled to warmth**:
+
+| memory state | correct | hallucinated (ungrounded) | answered with 0 reads |
+|---|---|---|---|
+| **COLD** (just installed, unwarmed) | 10/15 (67%) | 3/15 (20%) | 10/15 |
+| **WARM** (files passively ingested — the normal in-use state) | **15/15 (100%)** | **0/15 (0%)** | 15/15 |
+
+A **cold** memory confabulates specific constants it never read — every wrong answer
+(`compaction_floor=10000`, `max_context_tokens=180000`, model=`Sonnet`) was produced with
+**0 file reads**: it guessed from the directory tree instead of reading `config.py`. A
+**warm** memory (which passive ingestion produces automatically from the agent's own I/O)
+answered **everything correctly with zero reads and zero hallucination**. Negatives were
+3/3 both arms (it did not invent a Redis backend / a write capability / a `model` param).
+**Implication for launch:** the quality claim holds *for a warmed memory* (real usage);
+the cold-start hallucination risk is real → mitigations: warm via passive ingestion / an
+initial explore query, and/or push the system prompt to *verify exact values by reading*
+rather than answering constants from priors. (1 rep, LLM judge — spot-checked.)
+
+**#2 Freshness after edits (does it reflect the current code?).** 3/4 fresh:
+
+- **Agent-edit path (PostToolUse tees new content): 2/2 fresh** — teed edits are
+  authoritative, reflected immediately, no re-read. The core passive-learning claim holds.
+- **Out-of-band path (FileChanged, no content): 1/2** — the file is flagged stale, but a
+  fact already baked into an earlier Q&A can persist (one run answered `MAX_RETRIES=3`
+  after it changed to 7, from a prior answer, without re-reading). **So "never stale" is
+  too strong for out-of-band changes** — they're flagged and re-read *at the model's
+  discretion*, and accumulated Q&A/ledger isn't invalidated by a file change. Honest copy:
+  *agent edits are immediate/authoritative; external changes are flagged and usually
+  re-read.* (1 rep.)
+
+**#3 Steady-state (no warm-up) + persistence across restart.** Same 6-question batch, own
+server subprocess, live-memory repo:
+
+| phase | file reads | answered | cheap $ (imputed) |
+|---|---|---|---|
+| COLD (cleared → must explore) | 6 | 6/6 | 0.043 |
+| WARM (passively pre-populated, no warm-up) | **0** | 6/6 | 0.069 |
+| RESTART (kill server → reload from snapshot) | **0** | 6/6 | **0.018** |
+
+- **Persistence: PASS** — after a restart, previously-answered questions returned **0
+  reads, 6/6 correct, and the *cheapest* of all** — memory reloaded from the on-disk
+  snapshot.
+- **Steady state eliminates reading** (6 → 0 vs cold).
+- **Cost nuance:** freshly-teed *raw content* resident in-window (WARM) is *heavier* per
+  query than cold's lean lazy manifest on a small repo that fits the window (+60%); once
+  it's persisted/distilled to the lean manifest+ledger (RESTART), it's the **cheapest**
+  (−59% vs cold). So the cheap-side win shows up in the *distilled/persisted* steady state,
+  not the raw-teed moment — more motivation for retrieval/projection (FUTURE_DIRECTIONS §2).
+
+**Net for the announcement:** quality is strong **when warm** (100%/0-hallucination) —
+lead with that and be explicit that warming is what makes it accurate; don't claim
+"never stale" for out-of-band edits; persistence across restarts is a clean, demoable win.
+
 ## 0. Confound correction — the early runs are INVALID for the A/B
 
 Live Memory is installed as a **global plugin** (`live-memory@shofer`), so every
