@@ -20,9 +20,7 @@ from .question_queue import QuestionQueue
 from .summarizer import Summarizer
 from .tool_executor import ToolExecutor
 
-# A FileChanged event for a path teed in within this window is treated as our own
-# edit echoing back (the bytes are already current) and does not mark it stale.
-OBSERVE_INVALIDATE_GRACE_MS = 5000
+from .constants import OBSERVE_INVALIDATE_GRACE_MS
 
 
 class WorkspaceState:
@@ -33,6 +31,7 @@ class WorkspaceState:
         self.summarizer = summarizer
         self.window = ContextWindow(cfg.max_context_tokens, cfg.compaction_threshold, cfg.compaction_floor)
         self._window_version = 0  # bumped on each committed window swap (optimistic concurrency)
+        self.last_distill_at = 0.0  # wall time of the last observation-distillation (cooldown + fork dedupe)
         self.queue = QuestionQueue(cfg.max_queue_size, cfg.max_parallel_queries if cfg.is_parallel else 1)
         self.store = ConversationStore(cwd, cfg.snapshot_path(cwd))
         self.executor = ToolExecutor(cwd)
@@ -91,7 +90,7 @@ class WorkspaceState:
     @property
     def directory_tree_block(self) -> str:
         if self._dir_tree is None:
-            self._dir_tree = directory_tree_block(self.cwd, self.cfg.max_context_tokens)
+            self._dir_tree = directory_tree_block(self.cwd, self.cfg.max_context_tokens, self.cfg.directory_tree_fraction)
         return self._dir_tree
 
     def refresh_directory_tree(self) -> None:

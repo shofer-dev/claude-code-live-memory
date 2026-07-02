@@ -10,14 +10,13 @@ from typing import Any
 import os
 from pathlib import Path
 
+from .constants import DEFAULT_DIRECTORY_TREE_FRACTION
 from .models import estimate_tokens
 
 SKIP_PARTS = {
     "node_modules", ".git", "__pycache__", ".cache",
     "dist", "out", "build", "target", ".next", ".turbo", ".venv", "venv",
 }
-
-DIRECTORY_TREE_MAX_CONTEXT_FRACTION = 0.10
 
 
 def _scan(dir_path: Path, prefix: str) -> list[dict[str, Any]]:
@@ -56,8 +55,9 @@ def _render(entries: list[dict[str, Any]], indent: str) -> str:
     return result
 
 
-def generate_directory_tree(workspace: str, max_context_tokens: int) -> str:
-    max_tree_tokens = int(max_context_tokens * DIRECTORY_TREE_MAX_CONTEXT_FRACTION)
+def generate_directory_tree(workspace: str, max_context_tokens: int,
+                            fraction: float = DEFAULT_DIRECTORY_TREE_FRACTION) -> str:
+    max_tree_tokens = int(max_context_tokens * fraction)
     tree = _render(_scan(Path(workspace), ""), "")
     if estimate_tokens(tree) <= max_tree_tokens:
         return tree
@@ -72,8 +72,9 @@ def generate_directory_tree(workspace: str, max_context_tokens: int) -> str:
     return result
 
 
-def directory_tree_block(workspace: str, max_context_tokens: int) -> str:
-    tree = generate_directory_tree(workspace, max_context_tokens)
+def directory_tree_block(workspace: str, max_context_tokens: int,
+                         fraction: float = DEFAULT_DIRECTORY_TREE_FRACTION) -> str:
+    tree = generate_directory_tree(workspace, max_context_tokens, fraction)
     if tree.strip():
         return (
             "[Workspace structure:\n"

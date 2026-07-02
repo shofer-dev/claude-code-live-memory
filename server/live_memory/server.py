@@ -23,6 +23,7 @@ from starlette.responses import JSONResponse
 
 from .async_jobs import JobRunner
 from .config import Config, is_absolute_cwd
+from .constants import MAX_QUESTION_TIMEOUT_S, MIN_QUESTION_TIMEOUT_S
 from .keep_warm import keep_warm_loop
 from .llm_client import LlmClient, make_client
 from .manager import process_question
@@ -89,7 +90,7 @@ def build_server(cfg: Config | None = None) -> FastMCP:
         return None
 
     def _clamp_timeout(timeout: float) -> float:
-        return max(5.0, min(float(timeout) if timeout else registry.cfg.default_timeout_s, 1800.0))
+        return max(MIN_QUESTION_TIMEOUT_S, min(float(timeout) if timeout else registry.cfg.default_timeout_s, MAX_QUESTION_TIMEOUT_S))
 
     async def _answer(question: str, cwd: str, timeout_s: float) -> str:
         """Run one question through the workspace queue and render answer + metadata.

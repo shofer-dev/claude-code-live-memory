@@ -6,12 +6,10 @@ dropped transcript is passed) so the summary cannot bias toward recent queries.
 """
 from __future__ import annotations
 
+from .constants import MAX_TRANSCRIPT_CHARS
 from .llm_client import LlmClient
 from .models import ChatMessage, CostSnapshot
 from .prompts import NEUTRAL_SUMMARY_SYSTEM_PROMPT, neutral_summary_user_prompt
-
-# Cap the transcript we feed the summarizer so a huge batch can't blow the call.
-MAX_TRANSCRIPT_CHARS = 60_000
 
 
 def render_transcript(messages: list[ChatMessage]) -> str:

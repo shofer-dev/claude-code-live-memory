@@ -18,9 +18,8 @@ import os
 import shutil
 from pathlib import Path
 
+from .constants import MAX_TOOL_OUTPUT_BYTES
 from .models import ToolResult
-
-MAX_TOOL_OUTPUT_BYTES = 200_000
 
 # Tools that pull a *file's content* into the model's context (full or a fragment).
 # A change to such a file can stale the model's knowledge, so the manager records

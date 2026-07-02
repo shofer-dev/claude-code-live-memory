@@ -115,6 +115,16 @@ async def _distill_observations(ws: "WorkspaceState", window: "ContextWindow", t
     ws.summaries_written += 1
 
 
+def _shed_observations(window: "ContextWindow", target: int) -> None:
+    """Cooldown fallback for tier 0: drop LRU observed bytes WITHOUT summarizing (free —
+    the content is re-derivable from the agents' real work, so knowledge is re-learned, not
+    lost) until the window is at/under `target`. Bounds summarizer cost under heavy teeing."""
+    for fc in window.content_contexts_lru():
+        if window.estimated_token_count() <= target:
+            break
+        window.clear_content(fc.path)
+
+
 async def _maybe_compact(ws: "WorkspaceState", window: "ContextWindow") -> None:
     # Hysteresis: TRIGGER once over the high watermark (compaction_threshold, 0.85),
     # then compact all the way down to the low watermark (compaction_floor, 0.6) —
@@ -126,7 +136,18 @@ async def _maybe_compact(ws: "WorkspaceState", window: "ContextWindow") -> None:
     if window.estimated_token_count() <= int(window.max_context_tokens * window.fill_threshold):
         return
     target = int(window.max_context_tokens * window.compaction_floor)
-    await _distill_observations(ws, window, target)
+    # Tier 0: reclaim observed content. Distill into the ledger only if this workspace's
+    # distillation cooldown has elapsed — bounding summarizer cost and deduping concurrent
+    # forks under heavy multi-session teeing; otherwise SHED the raw bytes for free (they're
+    # re-derivable from real work). The reservation is set BEFORE the await so a racing fork
+    # sees it and sheds instead of launching a duplicate distillation.
+    if window.content_contexts_lru():
+        now = time.time()
+        if now - ws.last_distill_at >= ws.cfg.distill_min_interval_s:
+            ws.last_distill_at = now
+            await _distill_observations(ws, window, target)
+        else:
+            _shed_observations(window, target)
     if window.estimated_token_count() <= target:
         return
     still_over = window.enforce_limit(target)

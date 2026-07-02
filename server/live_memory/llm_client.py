@@ -20,6 +20,7 @@ import httpx
 
 from . import pricing
 from .config import Config
+from .constants import HTTP_CONNECT_TIMEOUT_S, HTTP_TIMEOUT_S
 from .models import ChatResult, CostSnapshot, ToolCall
 
 OAUTH_BETA = "oauth-2025-04-20"
@@ -159,7 +160,7 @@ class OpenAIClient:
         self._http = httpx.AsyncClient(
             base_url=cfg.base_url.rstrip("/"),
             headers={"Authorization": f"Bearer {cfg.api_key or 'missing'}", "Content-Type": "application/json"},
-            timeout=httpx.Timeout(600.0, connect=15.0),
+            timeout=httpx.Timeout(HTTP_TIMEOUT_S, connect=HTTP_CONNECT_TIMEOUT_S),
         )
 
     async def _post(self, payload: dict[str, Any]) -> dict[str, Any]:

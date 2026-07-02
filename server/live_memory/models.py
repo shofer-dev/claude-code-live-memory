@@ -13,9 +13,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-Role = Literal["user", "assistant", "system"]
+from .constants import CHARS_PER_TOKEN
 
-CHARS_PER_TOKEN = 4
+Role = Literal["user", "assistant", "system"]
 
 
 def estimate_tokens(text: str) -> int:

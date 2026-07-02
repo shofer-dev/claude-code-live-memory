@@ -16,6 +16,7 @@ import logging
 import time
 from typing import TYPE_CHECKING
 
+from .constants import KEEP_WARM_PING_MAX_TOKENS
 from .manager import _build_system, _history_to_messages
 from .tool_executor import TOOL_SCHEMAS
 
@@ -46,7 +47,7 @@ async def warm_one(ws: "WorkspaceState", now: float) -> None:
     system_stable, system_volatile = _build_system(ws, ws.window)
     conversation = _history_to_messages(ws.window.messages)
     conversation.append({"role": "user", "content": "(keep-warm ping — reply with a single token)"})
-    result = await ws.llm.chat(system_stable, conversation, tools=TOOL_SCHEMAS, max_tokens=1, system_volatile=system_volatile)
+    result = await ws.llm.chat(system_stable, conversation, tools=TOOL_SCHEMAS, max_tokens=KEEP_WARM_PING_MAX_TOKENS, system_volatile=system_volatile)
     ws.add_cost(result.cost)          # the warm read is real (cheap) spend
     ws.last_touch_at = now
     ws.keep_warms += 1

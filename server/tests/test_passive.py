@@ -142,6 +142,37 @@ async def test_compaction_hysteresis_compacts_to_floor_not_threshold(tmp_cfg):
 
 
 @pytest.mark.asyncio
+async def test_distillation_cooldown_sheds_instead_of_resummarizing(tmp_cfg):
+    # Under the per-workspace cooldown, an over-budget compaction with observations SHEDS
+    # raw bytes (free) instead of calling the summarizer again — bounding cost under heavy
+    # multi-session teeing. Distillation resumes once the interval elapses.
+    from live_memory.manager import _maybe_compact
+    tmp_cfg.max_context_tokens = 1000
+    tmp_cfg.compaction_threshold = 0.85
+    tmp_cfg.compaction_floor = 0.6
+    tmp_cfg.distill_min_interval_s = 1000  # long cooldown for the test
+    llm = FakeLlm(complete_text="LEDGER")
+    ws = WorkspaceState(SERVER_DIR, tmp_cfg, llm, Summarizer(llm))
+
+    for i in range(6):                                   # ~1500 tok of observations > 850 trigger
+        ws.observe(f"a{i}.py", "x" * 1000)
+    await _maybe_compact(ws, ws.window)                  # first: distills (1 summarizer call)
+    assert llm.complete_calls == 1 and ws.window.estimated_token_count() <= 600
+
+    for i in range(6):
+        ws.observe(f"b{i}.py", "y" * 1000)
+    await _maybe_compact(ws, ws.window)                  # within cooldown: SHED, no new call
+    assert llm.complete_calls == 1                       # still 1 — did not re-summarize
+    assert ws.window.estimated_token_count() <= 600      # …but budget still reclaimed
+
+    ws.last_distill_at = 0.0                              # simulate cooldown elapsed
+    for i in range(6):
+        ws.observe(f"c{i}.py", "z" * 1000)
+    await _maybe_compact(ws, ws.window)                  # distills again
+    assert llm.complete_calls == 2
+
+
+@pytest.mark.asyncio
 async def test_observed_content_is_not_persisted(tmp_cfg):
     # Raw teed bytes stay in-memory; the snapshot keeps only the lean manifest, and
     # the entry survives reload only because the on-disk file still hashes the same.

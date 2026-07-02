@@ -23,6 +23,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import constants as k
 from .oauth import subscription_present
 
 _PROVIDER_DEFAULTS = {
@@ -33,18 +34,18 @@ _PROVIDER_DEFAULTS = {
 # Provider knowledge: how often (s) to ping the prefix to keep its KV/prompt cache
 # warm — chosen below the provider's cache TTL. Anthropic's explicit cache_control
 # is ~5 min ephemeral; OpenAI prompt caching evicts after a few minutes idle.
-_KEEP_WARM_DEFAULTS = {"anthropic": 240.0, "openai": 240.0}
+_KEEP_WARM_DEFAULTS = {"anthropic": k.DEFAULT_KEEP_WARM_INTERVAL_S, "openai": k.DEFAULT_KEEP_WARM_INTERVAL_S}
 # DeepSeek caches on disk for HOURS/DAYS — far longer than a session's active
 # window — so warming is unnecessary. A very long interval makes the keep-warm
 # loop a no-op for it (it can never fire before keep_warm_max_idle abandons the
 # workspace). Detected by endpoint; still overridable per deployment.
-_DEEPSEEK_KEEP_WARM = 21600.0  # ~6h ≫ default max_idle (30 min) → effectively off
+_DEEPSEEK_KEEP_WARM = k.DEEPSEEK_KEEP_WARM_INTERVAL_S  # ~6h ≫ default max_idle → effectively off
 
 
 def _keep_warm_default(provider: str, base_url: str) -> float:
     if "deepseek" in base_url.lower():
         return _DEEPSEEK_KEEP_WARM
-    return _KEEP_WARM_DEFAULTS.get(provider, 240.0)
+    return _KEEP_WARM_DEFAULTS.get(provider, k.DEFAULT_KEEP_WARM_INTERVAL_S)
 
 
 def _truthy(v: object) -> bool:
@@ -57,7 +58,7 @@ def _data_dir() -> Path:
 
 
 def workspace_hash(cwd: str) -> str:
-    return hashlib.sha256(str(Path(cwd).resolve()).encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha256(str(Path(cwd).resolve()).encode("utf-8")).hexdigest()[:k.WORKSPACE_HASH_LEN]
 
 
 def is_absolute_cwd(cwd: str) -> bool:
@@ -117,8 +118,8 @@ def _api_key_from_env(provider: str) -> str | None:
 
 @dataclass
 class Config:
-    host: str = field(default_factory=lambda: os.environ.get("LIVE_MEMORY_HOST", "127.0.0.1"))
-    port: int = field(default_factory=lambda: int(os.environ.get("LIVE_MEMORY_PORT", "7711")))
+    host: str = field(default_factory=lambda: os.environ.get("LIVE_MEMORY_HOST", k.DEFAULT_HOST))
+    port: int = field(default_factory=lambda: int(os.environ.get("LIVE_MEMORY_PORT", str(k.DEFAULT_PORT))))
 
     # resolved in __post_init__ from env > config.json > defaults
     provider: str = ""
@@ -128,25 +129,28 @@ class Config:
     use_oauth: bool = False
     metered: bool = True  # whether cost is $-metered (API key) vs subscription (rate-limited)
 
-    max_context_tokens: int = field(default_factory=lambda: int(os.environ.get("LIVE_MEMORY_MAX_CONTEXT_TOKENS", "128000")))
+    max_context_tokens: int = field(default_factory=lambda: int(os.environ.get("LIVE_MEMORY_MAX_CONTEXT_TOKENS", str(k.DEFAULT_MAX_CONTEXT_TOKENS))))
     # Compaction hysteresis (high/low watermark): TRIGGER once fill exceeds
     # `compaction_threshold`, then compact all the way down to `compaction_floor`
     # (not back to the trigger). The headroom between them is what makes compaction
     # RARE and BATCHED — the next N questions run against a stable, cache-hit window
     # instead of re-compacting (and busting the prompt cache) every question. A floor
     # == threshold reproduces the old thrash-prone behavior.
-    compaction_threshold: float = field(default_factory=lambda: float(os.environ.get("LIVE_MEMORY_COMPACTION_THRESHOLD", "0.85")))
-    compaction_floor: float = field(default_factory=lambda: float(os.environ.get("LIVE_MEMORY_COMPACTION_FLOOR", "0.6")))
-    directory_tree_fraction: float = field(default_factory=lambda: float(os.environ.get("LIVE_MEMORY_DIRTREE_FRACTION", "0.10")))
-    max_iterations: int = field(default_factory=lambda: int(os.environ.get("LIVE_MEMORY_MAX_ITERATIONS", "25")))
-    max_queue_size: int = field(default_factory=lambda: int(os.environ.get("LIVE_MEMORY_MAX_QUEUE_SIZE", "100")))
-    default_timeout_s: float = field(default_factory=lambda: float(os.environ.get("LIVE_MEMORY_DEFAULT_TIMEOUT_S", "90")))
+    compaction_threshold: float = field(default_factory=lambda: float(os.environ.get("LIVE_MEMORY_COMPACTION_THRESHOLD", str(k.DEFAULT_COMPACTION_THRESHOLD))))
+    compaction_floor: float = field(default_factory=lambda: float(os.environ.get("LIVE_MEMORY_COMPACTION_FLOOR", str(k.DEFAULT_COMPACTION_FLOOR))))
+    # Min seconds between observation-distillations per workspace; within it, over-budget
+    # compaction sheds raw teed bytes for free instead of paying to summarize (see §Compaction).
+    distill_min_interval_s: float = field(default_factory=lambda: float(os.environ.get("LIVE_MEMORY_DISTILL_MIN_INTERVAL_S", str(k.DEFAULT_DISTILL_MIN_INTERVAL_S))))
+    directory_tree_fraction: float = field(default_factory=lambda: float(os.environ.get("LIVE_MEMORY_DIRTREE_FRACTION", str(k.DEFAULT_DIRECTORY_TREE_FRACTION))))
+    max_iterations: int = field(default_factory=lambda: int(os.environ.get("LIVE_MEMORY_MAX_ITERATIONS", str(k.DEFAULT_MAX_ITERATIONS))))
+    max_queue_size: int = field(default_factory=lambda: int(os.environ.get("LIVE_MEMORY_MAX_QUEUE_SIZE", str(k.DEFAULT_MAX_QUEUE_SIZE))))
+    default_timeout_s: float = field(default_factory=lambda: float(os.environ.get("LIVE_MEMORY_DEFAULT_TIMEOUT_S", str(k.DEFAULT_TIMEOUT_S))))
     # Same-workspace concurrency: "parallel" (default — fork the window per
     # question, run up to max_parallel_queries at once, commit back the fork that
     # explored the most, no queue delay) or "serial" (one question at a time, the
     # shared window grows in place). Anything but "serial" → parallel.
     concurrency: str = field(default_factory=lambda: (os.environ.get("LIVE_MEMORY_CONCURRENCY") or "parallel").strip().lower())
-    max_parallel_queries: int = field(default_factory=lambda: int(os.environ.get("LIVE_MEMORY_MAX_PARALLEL_QUERIES", "4")))
+    max_parallel_queries: int = field(default_factory=lambda: int(os.environ.get("LIVE_MEMORY_MAX_PARALLEL_QUERIES", str(k.DEFAULT_MAX_PARALLEL_QUERIES))))
     # Opt-in: also expose ask_live_memory_submit / ask_live_memory_result (a
     # server-side submit/poll pattern, since MCP has no native async tool calls).
     async_tools: bool = field(default_factory=lambda: _truthy(os.environ.get("LIVE_MEMORY_ASYNC_TOOLS", "false")))
@@ -156,7 +160,7 @@ class Config:
     # default (floor = today's behavior via the active-read fallback); turn off for a
     # clean A/B baseline. The server-side cap truncates any single teed file.
     passive_ingestion: bool = field(default_factory=lambda: _truthy(os.environ.get("LIVE_MEMORY_PASSIVE_INGESTION", "true")))
-    passive_max_file_bytes: int = field(default_factory=lambda: int(os.environ.get("LIVE_MEMORY_PASSIVE_MAX_FILE_BYTES", "262144")))
+    passive_max_file_bytes: int = field(default_factory=lambda: int(os.environ.get("LIVE_MEMORY_PASSIVE_MAX_FILE_BYTES", str(k.DEFAULT_PASSIVE_MAX_FILE_BYTES))))
     # Cold-start grounding guard: if the memory has no basis to answer (no observed file
     # content in-window and an ~empty ledger) and the model tries to answer WITHOUT
     # consulting the code, force it to explore (Grep/Read) once before answering — a cheap
@@ -168,7 +172,7 @@ class Config:
     # warming a workspace idle longer than max_idle (don't keep abandoned ones hot).
     keep_warm: bool = field(default_factory=lambda: _truthy(os.environ.get("LIVE_MEMORY_KEEP_WARM", "false")))
     keep_warm_interval_s: float = 0.0  # resolved in __post_init__ (provider default or override)
-    keep_warm_max_idle_s: float = field(default_factory=lambda: float(os.environ.get("LIVE_MEMORY_KEEP_WARM_MAX_IDLE_S", "1800")))
+    keep_warm_max_idle_s: float = field(default_factory=lambda: float(os.environ.get("LIVE_MEMORY_KEEP_WARM_MAX_IDLE_S", str(k.DEFAULT_KEEP_WARM_MAX_IDLE_S))))
     # Snap each workspace key to its enclosing git repo root (default on), so a
     # subdir and the repo root share one memory. Set false for per-subdir memory.
     canonicalize_workspace: bool = field(default_factory=lambda: _truthy(os.environ.get("LIVE_MEMORY_CANONICALIZE_WORKSPACE", "true")))

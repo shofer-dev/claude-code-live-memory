@@ -12,12 +12,11 @@ from __future__ import annotations
 import asyncio
 from typing import Awaitable, Callable
 
+from .constants import HARD_BACKSTOP_MARGIN_S
 from .models import QuestionResult
 
 # Processor: (question, cwd, deadline_monotonic) -> QuestionResult
 Processor = Callable[[str, str, float], Awaitable[QuestionResult]]
-
-HARD_BACKSTOP_MARGIN_S = 15.0
 
 
 class QueueFull(Exception):

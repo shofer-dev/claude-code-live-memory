@@ -13,14 +13,13 @@ from __future__ import annotations
 import copy
 import hashlib
 
+from .constants import COLD_LEDGER_MAX_CHARS, DEFAULT_COMPACTION_FLOOR, DEFAULT_COMPACTION_THRESHOLD
 from .models import ChatMessage, ContextUsage, FileContext, estimate_tokens, now_ms
-
-TRUNCATED_MESSAGE_PAIR_TOKEN_COST = 100
 
 
 class ContextWindow:
-    def __init__(self, max_context_tokens: int, fill_threshold: float = 0.85,
-                 compaction_floor: float = 0.6):
+    def __init__(self, max_context_tokens: int, fill_threshold: float = DEFAULT_COMPACTION_THRESHOLD,
+                 compaction_floor: float = DEFAULT_COMPACTION_FLOOR):
         self.messages: list[ChatMessage] = []
         self.file_contexts: list[FileContext] = []
         self.knowledge_ledger: str = ""
@@ -149,7 +148,7 @@ class ContextWindow:
     def has_file(self, path: str) -> bool:
         return any(fc.path == path for fc in self.file_contexts)
 
-    def is_cold(self, min_ledger_chars: int = 160) -> bool:
+    def is_cold(self, min_ledger_chars: int = COLD_LEDGER_MAX_CHARS) -> bool:
         """True when there's no grounding to answer FROM: no observed file content in the
         window and an essentially-empty knowledge ledger. Prior Q&A is deliberately
         excluded (it may itself be a guess). Used to force exploration before a cold, cheap

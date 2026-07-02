@@ -24,7 +24,7 @@ import httpx
 
 CLAUDE_CODE_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 TOKEN_ENDPOINT = "https://console.anthropic.com/v1/oauth/token"
-REFRESH_MARGIN_MS = 120_000  # refresh if within 2 min of expiry
+from .constants import OAUTH_REFRESH_MARGIN_MS as REFRESH_MARGIN_MS
 
 
 def _credentials_path() -> Path:
