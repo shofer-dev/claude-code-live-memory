@@ -368,3 +368,46 @@ counting every query.
 the ±15% heuristic into ±few-% with zero added latency and no provider asymmetry. Reserve an actual
 `count_tokens` call, if ever, for a *single* boundary check only when the heuristic says we're within
 ~10–15% of the hard limit.
+
+---
+
+## Appendix B — The knowledge ledger (format & lifecycle)
+
+The **knowledge ledger** is Live Memory's durable, distilled memory of a repo: a single free-text
+block per workspace (`ContextWindow.knowledge_ledger: str`), persisted in the snapshot and rendered
+near the top of the **volatile** system block on every question, under `## Accumulated knowledge
+(durable facts distilled from earlier questions)` (empty until the first compaction —
+`prompts.empty_ledger_text()`).
+
+**Format — a convention, not a schema.** There is no rigid grammar; the shape is *guided by the
+summary prompt* (`prompts.NEUTRAL_SUMMARY_SYSTEM_PROMPT`), deliberately kept as **dense natural
+language** rather than JSON/graph so the model still reasons well over it (the density "sweet spot" —
+too terse/symbolic and the LLM reasons *worse*; see FUTURE_DIRECTIONS §2). The convention the prompt
+enforces:
+
+- **Dense, structured facts** — *locations* (where things live), *relationships* (what calls /
+  consumes / depends on what), and *conventions*. Canonical example (from the prompt):
+  `Auth lives in src/auth/*; SessionManager (src/auth/session.ts) issues tokens; consumed by api/middleware.ts`.
+- **Query-agnostic** — general, reusable codebase facts, NOT "the answer to the last question"; the
+  summarizer runs with recent/current queries *out of scope* so it cannot bias toward them.
+- **Merged & de-duplicated** — each compaction *extends* the existing ledger; facts already present
+  are not repeated; conversational filler, tool-call mechanics, and one-off specifics are dropped.
+- **Grounded** — never invents facts; records only what the transcript/ledger support.
+
+**Lifecycle.**
+1. Starts empty.
+2. **Grown by compaction** (`manager._maybe_compact`): tier-0 folds evicted *observed file content*
+   into it, and tier-2 folds the oldest *Q&A pairs* into it — both via
+   `summarizer.summarize(existing_ledger, dropped)`, which calls the neutral summarizer and returns
+   the **updated ledger text only** (a merge of existing + newly-dropped; input capped at
+   `MAX_TRANSCRIPT_CHARS` per call). Distillation into the ledger is rate-limited by the per-workspace
+   cooldown (see §Compaction).
+3. **Rendered** into the volatile system block each question — kept *out* of the cached stable prefix
+   so it can grow without busting the directory-tree cache — and consulted "context-first" before any
+   tool call.
+4. **Persisted** verbatim in the per-workspace snapshot; reloaded on restart.
+
+**Why free text, not a parseable schema.** It is read by an LLM, not a parser; the goal is *the right
+facts at a density the model reasons over cheaply*, plus a stable, extend-only prefix that stays
+cache-friendly. A denser, graph/skeleton representation is a parked future direction
+(FUTURE_DIRECTIONS §2), not the current contract.
