@@ -411,3 +411,41 @@ enforces:
 facts at a density the model reasons over cheaply*, plus a stable, extend-only prefix that stays
 cache-friendly. A denser, graph/skeleton representation is a parked future direction
 (FUTURE_DIRECTIONS §2), not the current contract.
+
+---
+
+## Appendix C — Behaviour on very large codebases (scaling limits)
+
+**Verdict: accumulation cannot overflow the context window; the limits are knowledge *loss* and
+one per-question hard-error edge — not unbounded growth.**
+
+**Why accumulation can't overflow.** Compaction (`_maybe_compact`) can always shed the persistent
+window down to a tiny floor: observations shed to manifest one-liners (tier 0), manifest file
+contexts evict LRU (tier 1), Q&A summarizes to ~2 messages (tier 2). Crucially the **ledger
+self-caps**: each compaction regenerates it via `summarizer.summarize` → `llm.complete(...,
+max_tokens=2048)`, so it is bounded to ~2048 tokens regardless of how much the repo "taught" it.
+The tracked budget (`estimated_token_count` = messages + file-contexts + ledger) can therefore
+always be driven under `compaction_floor`. The persistent window is structurally bounded to roughly
+*(dir-tree ≤10%) + (ledger ≤2k) + minimal Q&A*.
+
+**The real limits as the repo grows very large:**
+
+1. **Ledger saturation → knowledge loss (fundamental).** The ~2048-token ledger is far too small to
+   represent a huge repo. As the known surface grows, each compaction crams an ever-larger fact set
+   into 2048 tokens, so the summarizer **squeezes out older/less-recent facts** (or truncates) — a
+   lossy, recency/frequency-biased summary. Live Memory degrades (lower recall, more re-exploration),
+   it does not crash. A flat single-ledger store inherently can't hold a large repo → the fix is
+   retrieval, not a bigger ledger (FUTURE_DIRECTIONS §2 and §4).
+2. **Directory-tree scan is O(all files).** `directory_tree._scan` walks the whole workspace and
+   builds the full structure in memory before rendering + truncating to ~10% of the window. Output is
+   bounded (no overflow), but the **scan is slow/memory-heavy** on the first query for a giant
+   monorepo, and the truncated tree gives poor structural coverage. (Cached per workspace.)
+3. **Per-question transient overflow (the only hard-error vector).** Within a single question, tool
+   results accumulate in the **transient conversation, which is not budget-managed** —
+   `window.enforce_limit()` only evicts persistent file contexts, not in-flight tool output. The only
+   caps are `max_iterations` (25) and `MAX_TOOL_OUTPUT_BYTES` (200k ≈ 50k tokens *per result*). A few
+   large reads in one question can exceed the model's hard context → a "prompt too long" API error
+   (surfaced as a failed answer). Large files make this likelier. Note the budget math also **excludes
+   the stable dir-tree prefix and the transient results**, so the real prompt can exceed the tracked
+   number. Reactive handling is the intended plan (Appendix A) but is **not yet implemented**
+   (FUTURE_DIRECTIONS §4).

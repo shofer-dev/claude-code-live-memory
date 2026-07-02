@@ -176,3 +176,37 @@ passive population scale (ingest into a structured index, not a flat window).
 Each step is independently measurable against the benchmark harness (`benchmark/harness/`):
 the metric that matters is **premium tokens on understanding-bound tasks**, and whether the
 cheap-side cost stays under the premium saved.
+
+## 4. Scaling & robustness on very large codebases
+
+**Where we are (see DESIGN.md Appendix C).** Accumulation *cannot* overflow the context window —
+compaction always sheds the persistent window to a small floor, and the knowledge ledger self-caps
+at ~2048 tokens (each compaction regenerates it under `max_tokens=2048`). So a very large repo
+degrades, it doesn't crash. But that same cap is the ceiling: the ledger can't represent a huge
+codebase, so it becomes a **lossy, recency/frequency-biased** summary (older facts squeezed out).
+
+**Three things to pursue (roughly in ROI order):**
+
+1. **Retrieval, not a bigger ledger (the fundamental fix; = §2).** Ledger saturation is inherent to a
+   flat single-ledger store. Raising the 2048 cap only delays it *and* re-inflates the window (the
+   §0b bloat problem). The real answer is the §2 architecture — a hierarchical/graph/skeleton store
+   with **per-query retrieval** projecting only the relevant subset into the window — so total known
+   surface is unbounded while the in-window footprint stays lean. This is what lets Live Memory scale
+   past "what fits in one 2k-token ledger."
+
+2. **Per-question transient-token guard (cheap robustness; turns a crash into degradation).** The
+   in-flight tool-result conversation is not budget-managed, so a single question that reads several
+   large files can exceed the model's hard context → a "prompt too long" error. Add a **per-question
+   cap on accumulated tool-result tokens** (stop reading + answer best-effort when near the limit)
+   and/or a **reactive retry** (catch the context-length error → compact/trim → retry). Small, local
+   to the agent loop; the one item that removes an actual hard-error edge on large repos. (Pairs with
+   Appendix A's reactive-overflow note.)
+
+3. **Bounded / lazy directory-tree scan.** `_scan` currently walks the entire workspace and builds the
+   full tree in memory before truncating to ~10%. For giant monorepos, make the scan **stop after N
+   entries** (or lazily expand) rather than scan-all-then-truncate, and consider leaning on
+   Grep/Glob/find_paths instead of a large resident tree when the repo is huge.
+
+**Measurement hinge:** run the understanding-bound A/B on a repo whose working set **exceeds** the
+window (or shrink the window) and track recall + premium tokens as size grows — the point where recall
+falls off is exactly where retrieval (§2) earns its keep.
