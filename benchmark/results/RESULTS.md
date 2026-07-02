@@ -18,8 +18,8 @@ finding is that **accuracy is coupled to warmth**:
 | memory state | correct | hallucinated (ungrounded) | answered with 0 reads |
 |---|---|---|---|
 | COLD, no guard (old behavior) | 10/15 (67%) | 3/15 (20%) | 10/15 |
-| **COLD + explore-guard** (shipped, default on) | **15/15 (100%)** | **0/15 (0%)** | 1/15 (reads to ground) |
-| **WARM** (files passively ingested — the normal in-use state) | **15/15 (100%)** | **0/15 (0%)** | 15/15 |
+| **COLD + explore-guard** (shipped, default on) | **~91% mean** (13–15/15 across 3 reps) | ~7% (0–13%) | reads to ground (~1/q) |
+| **WARM** (files passively ingested — the normal in-use state) | **15/15 (100%)** | **0/15 (0%)** | 15/15 (1 rep) |
 
 A **cold** memory confabulates specific constants it never read — every wrong answer
 (`compaction_floor=10000`, `max_context_tokens=180000`, model=`Sonnet`) was produced with
@@ -35,26 +35,27 @@ a "verify exact values by reading" rule to the system prompt left cold at 67% (u
 **FIXED structurally (shipped, default on): `force_explore_when_cold`.** When the memory has no
 grounding (`ContextWindow.is_cold()` — no observed file content in-window and an ~empty ledger)
 and the model tries to answer with **zero tool calls**, the loop rejects that first answer once
-and forces it to explore (Grep/Read) before answering. Result: **cold 67%→100%, hallucination
-20%→0%** — the cold memory now reads to ground (avg ~1.2 reads/q) instead of guessing from
-priors. Warm memory (content in-window) is untouched → still 100% at 0 reads. So the honest
-cost/quality picture is: **warm = accurate & free; cold = accurate but pays a read** (which is
-the whole point of a memory that explores). Env: `LIVE_MEMORY_FORCE_EXPLORE_WHEN_COLD`. Known
-limit: `is_cold` is coarse (any observed content → "not cold"), so a *partially*-warm memory can
-still answer an un-observed file's specifics from priors; broad passive ingestion covers that in
-practice. (1 rep per arm, LLM judge — spot-checked.)
+and forces it to explore (Grep/Read) before answering. Result over 3 reps: **cold 67% → ~91%
+(87–100%), hallucination 20% → ~7% (0–13%)** — the cold memory now reads to ground (~1 read/q)
+instead of guessing. The residual misses are **nuanced multi-part questions** (compaction-tier
+*order*, auth-vs-model Haiku/Sonnet), not blind constant confabulation. Warm memory (content
+in-window) is untouched → still 100% at 0 reads. So the honest cost/quality picture is: **warm =
+accurate & free; cold = ~91% accurate but pays a read** (the whole point of a memory that
+explores). Env: `LIVE_MEMORY_FORCE_EXPLORE_WHEN_COLD`. Known limit: `is_cold` is coarse (any
+observed content → "not cold"), so a *partially*-warm memory can still answer an un-observed
+file's specifics from priors; broad passive ingestion covers that in practice. (cold+guard 3
+reps, warm 1 rep, LLM judge — spot-checked.)
 
-**#2 Freshness after edits (does it reflect the current code?).** 3/4 fresh:
+**#2 Freshness after edits (does it reflect the current code?).** Across 3 reps:
 
-- **Agent-edit path (PostToolUse tees new content): 2/2 fresh** — teed edits are
+- **Agent-edit path (PostToolUse tees new content): 6/6 fresh (100%)** — teed edits are
   authoritative, reflected immediately, no re-read. The core passive-learning claim holds.
-- **Out-of-band path (FileChanged, no content): 1/2** — the file is flagged stale, but a
-  fact already baked into an earlier Q&A can persist (one run answered `MAX_RETRIES=3`
-  after it changed to 7, from a prior answer, without re-reading). **So "never stale" is
-  too strong for out-of-band changes** — they're flagged and re-read *at the model's
-  discretion*, and accumulated Q&A/ledger isn't invalidated by a file change. Honest copy:
-  *agent edits are immediate/authoritative; external changes are flagged and usually
-  re-read.* (1 rep.)
+- **Out-of-band path (FileChanged, no content): 4/6 (~67%)** — the file is flagged stale, but a
+  fact already baked into an earlier Q&A can persist (a run answered `MAX_RETRIES=3` after it
+  changed to 7, from a prior answer, without re-reading). **So "never stale" is too strong for
+  out-of-band changes** — they're flagged and re-read *at the model's discretion*, and accumulated
+  Q&A/ledger isn't invalidated by a file change. Honest copy (now in the slide + launch doc):
+  *agent edits are immediate/authoritative; external changes are flagged and usually re-read.* (3 reps.)
 
 **#3 Steady-state (no warm-up) + persistence across restart.** Same 6-question batch, own
 server subprocess, live-memory repo:
