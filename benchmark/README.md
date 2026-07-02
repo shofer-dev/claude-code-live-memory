@@ -53,6 +53,19 @@ authoritatively, on a real codebase (more credible than a game).
 **Base commit (pinned):** every run checks out shofer at exactly
 `32cdefcba07ee9afde9bf65b373a75531f015d96` — never `master` (a moving target).
 
+**Scale (measured at the pinned base `32cdefc`, excluding `node_modules`/`dist`/`.d.ts`)** — shofer
+is a genuinely large TypeScript monorepo, which is the point: comprehension-heavy work on a big repo
+is where Live Memory has leverage.
+
+| metric | value |
+|---|---|
+| workspace packages | 9 (`core`, `types`, `ipc`, `telemetry`, `vscode-shim`, `evals`, `build`, 2× config) |
+| TS/TSX source files | ~1,900 |
+| source lines of code | ~442k (of which the `src/` extension the features touch: ~985 files / ~278k LOC) |
+| test files (`*.spec.ts` / `*.test.ts`) | ~544 |
+| native tool classes (`src/core/tools/*Tool.ts`) | 55 |
+| tracked files at commit | ~2,888 |
+
 **The features** are four bounded, dependency-ordered slices of shofer
 modernization work — all **internal** (no server/UI → headless-testable, no
 extension-host flakiness) and **comprehension-heavy** (each requires
@@ -60,6 +73,14 @@ understanding existing shofer subsystems), which is exactly Live Memory's
 leverage. Each is scoped to a one-run slice. **Acceptance per feature: existing
 shofer tests stay green + the feature's new test passes** (no regressions =
 objective "it works").
+
+> **Coverage note — what's actually been benchmarked vs this F1–F4 plan.** The runs to date cover
+> the **understanding-bound trace task** (§9) and an **F1-flavoured tool-wiring feature**: adding a
+> read-only tool (`count_lines`, plus `count_chars`/`count_bytes`/`count_words` in the sequence run)
+> wired through the tool machinery — single, K=20 replicates, and a 4-feature sequence. That exercises
+> F1's *"add & wire a tool"* surface, but **not** the full F1 spec (schema-as-contract, deleting the
+> hand-maintained mirrors, `ToolFailure`), and **F2–F4 have not been run.** F1–F4 below remain the
+> planned slice list; see [`results/RESULTS.md`](results/RESULTS.md) for exactly what ran.
 
 ### F1 — Schema-as-contract for tools (`src/core/tools/`)
 A tool's shape is re-declared in several places (parameter/parser definition, UI
@@ -237,6 +258,7 @@ with-arm's own file tools to force usage — that confounds the comparison.
 - [x] **Passive-ingestion (cheap-side) benchmarks** — `passive_hinge.py` (fits window)
       and `passive_compaction.py` (overflow → drove two compaction fixes).
 - [x] §9 filled; full evidence in [`results/RESULTS.md`](results/RESULTS.md).
+- [ ] **F2–F4 features not yet benchmarked** — only the F1-flavoured tool-wiring feature has run (see §3 coverage note).
 - [ ] More reps of the sequence A/B (1 rep so far; premium-$ is cache-read-noisy).
 - [ ] An *understanding-bound* sequence (the regime where compounding should show).
 
