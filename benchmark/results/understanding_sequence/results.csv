@@ -1,0 +1,13 @@
+arm,qi,turns,read_calls,read_tok,lm_calls,lm_tok,pin,pout,pcr,pcw,status,api_fail
+without,0,12,4,39372,0,0,2945,3577,313386,68388,complete,no
+without,1,16,2,6502,0,0,5234,1962,283931,15905,complete,no
+without,2,5,25,41544,0,0,8,2097,93086,8706,complete,no
+without,3,5,27,35353,0,0,8,1525,93082,6871,complete,no
+without,4,5,37,34725,0,0,8,2246,93169,9668,complete,no
+without,5,5,3,1811,0,0,8,1165,93089,4598,complete,no
+with,0,22,10,49642,1,21,5267,4520,792432,79456,complete,no
+with,1,5,0,0,1,591,10,857,93679,5129,complete,no
+with,2,5,0,0,1,1321,10,1637,93736,6264,complete,no
+with,3,5,0,0,1,1304,10,1210,93621,6024,complete,no
+with,4,5,0,0,1,1660,10,1492,93663,6618,complete,no
+with,5,5,0,0,1,965,10,1030,93648,5582,complete,no
