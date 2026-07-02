@@ -77,6 +77,7 @@ live-memory/
         ├── llm_client.py          # provider-pluggable: Anthropic Messages | OpenAI-compatible
         ├── oauth.py               # subscription OAuth credential + auto-refresh (zero-config)
         ├── config.py              # layered config (env > config.json > defaults) + provider knowledge
+        ├── constants.py           # ALL tunable magic numbers + defaults, centralized (config sources its defaults here)
         ├── models.py              # core dataclasses (ChatMessage, FileContext, QuestionResult, …)
         ├── tool_executor.py       # read-only tools (Read/Grep/Glob/find_paths/git/…), path-jailed
         ├── directory_tree.py      # workspace scan, ~10% context cap
