@@ -259,8 +259,8 @@ with-arm's own file tools to force usage — that confounds the comparison.
       and `passive_compaction.py` (overflow → drove two compaction fixes).
 - [x] §9 filled; full evidence in [`results/RESULTS.md`](results/RESULTS.md).
 - [ ] **F2–F4 features not yet benchmarked** — only the F1-flavoured tool-wiring feature has run (see §3 coverage note).
-- [ ] More reps of the sequence A/B (1 rep so far; premium-$ is cache-read-noisy).
-- [ ] An *understanding-bound* sequence (the regime where compounding should show).
+- [x] More reps of the edit-bound sequence A/B (3 reps: read_tok −38%, premium $ −24%; noisy, still break-even net).
+- [x] An *understanding-bound* sequence (`run_understanding_sequence.sh`) — compounding shows on the mechanism (with-arm reads **0** after warmup; **−69%** cumulative read_tok), premium-$ flat. See RESULTS.md.
 
 ## 9. Results
 

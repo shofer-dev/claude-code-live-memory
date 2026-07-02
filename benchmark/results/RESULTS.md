@@ -201,45 +201,58 @@ from real work for free). Consistent with the earlier K=12 run (−42% premium, 
 the edit-bound regime remains break-even (see above) — Live Memory makes *understanding* cheaper,
 not *execution*.
 
-## COMPOUNDING SEQUENCE A/B — does accumulation rescue edit-bound work?
+## COMPOUNDING SEQUENCE A/B — does accumulation compound across a sequence?
 
-The open question from the single-feature runs: over a *sequence* of features, does the
-with-arm's accumulating memory (now also warmed for free by passive ingestion) compound
-into a win where one feature couldn't? Harness: `harness/run_sequence.sh` — 4 read-only
-tools added one per feature (`count_lines → count_chars → count_bytes → count_words`),
-**cold agent per feature**, **accumulating** pinned worktree, with-arm's Live Memory
-persists across the whole sequence; without-arm re-explores each time. 1 sequence rep,
-**8/8 features accepted** (tsc green + tool wired in the schema). `results/sequence/`.
+Both variants keep Live Memory **persisting + accumulating across the whole sequence** (warmed
+for free), with the cold arm re-exploring at every step.
 
-| feature | WO read_tok | WI read_tok | WI lm_calls | WO prem$ | WI prem$ |
-|---|---|---|---|---|---|
-| count_lines | 33,122 | 22,978 | 1 | 1.031 | 0.987 |
-| count_chars | 15,562 | 24,052 | **0** | 0.494 | 0.578 |
-| count_bytes | 26,065 | 2,473 | 1 | 0.599 | 0.380 |
-| count_words | 13,349 | 12,466 | 1 | 0.507 | 0.425 |
-| **cumulative** | **88,098** | **61,969 (−30%)** | | **2.63** | **2.37 (−10%)** |
+### Edit-bound sequence (3 reps) — accumulation does NOT rescue execution
+`harness/run_sequence.sh` — 4 read-only tools added one per feature (`count_lines → count_chars →
+count_bytes → count_words`), **cold agent per feature**, accumulating pinned shofer worktree.
+**3 reps, 24/24 features accepted** (`tsc` green + tool wired). `results/sequence/`.
 
-- read_tok (premium codebase reading): **−30%** cumulative.
-- premium $ (Sonnet, imputed): **−10%** cumulative.
-- cheap-side (Haiku, incl. one cold warm-up): **+$0.35**.
-- **NET total $ (premium + cheap): without 2.63 vs with 2.72 = +3% — break-even.**
-- turns 136 vs 138 (identical); acceptance 4/4 both arms.
+| cumulative over 4 features | without | with | Δ mean |
+|---|---|---|---|
+| read_tok (premium codebase reading) | 89,553 ± 4,081 | 55,459 ± 11,546 | **−38%** |
+| premium $ (Sonnet, imputed) | 3.093 ± 0.382 | 2.346 ± 0.367 | **−24%** |
 
-**Conclusion: accumulation does NOT flip edit-bound feature work into a win — it stays
-break-even, confirming the structural finding.** Why: (1) feature work is execution-bound —
-the agent must read the exact files it will edit, so it reads regardless of Live Memory
-(the with-arm even made **0** LM calls on one feature and read 24k anyway); turns are driven
-by the edit-check-iterate loop, not understanding. (2) The modest read-offload (−30%) and
-premium dip (−10%) are real but get eaten by the cheap-side warm-up, netting +3%. (3) LM
-usage is inconsistent on edit tasks (lm_calls 1/0/1/1) — the agent doesn't lean on it when
-it's editing. Steady-state (already-warm, no warm-up) would be ~−10% net, but only on the
-premium dip, which is itself within the (large, single-rep) cache-read variance.
+Real but **noisy** (with-arm read_tok across the 3 reps: 62k / 39k / 65k) and it does **not flip
+edit work into a clear win**: feature work is execution-bound — the agent must read the exact files
+it edits (sometimes with 0 LM calls), turns are driven by the edit-check-iterate loop, and once the
+cheap-side warm-up is counted the net is ~break-even. Confirms the structural finding: Live Memory
+makes *understanding* cheaper, not *execution*.
 
-**This sharpens the value proposition:** Live Memory's win is **understanding-bound work**
-(−42% premium, proven, low-variance) — *not* execution, and accumulation across an
-edit-bound sequence does not change that. The lever for edit-heavy sequences is **fewer
-turns**, which Live Memory doesn't touch. (Caveat: 1 sequence rep; premium-$ is cache-read-
-noisy — the read_tok mechanism is the reliable signal.)
+### Understanding-bound sequence (1 rep) — compounding DOES show (on the mechanism)
+`harness/run_understanding_sequence.sh` — 6 **distinct**, read-only comprehension questions across
+different shofer subsystems (tool-call path, schema validation, permissions, persistence,
+cancellation, model routing), asked in order; with-arm's LM persists + accumulates, cold arm
+re-reads each. `results/understanding_sequence/`.
+
+| q | WO read_tok | WI read_tok | WI lm_calls |
+|---|---|---|---|
+| 0 | 39,372 | 49,642 | 1 |
+| 1 | 6,502 | **0** | 1 |
+| 2 | 41,544 | **0** | 1 |
+| 3 | 35,353 | **0** | 1 |
+| 4 | 34,725 | **0** | 1 |
+| 5 | 1,811 | **0** | 1 |
+| **cumulative** | **159,307** | **49,642 (−69%)** | |
+
+**The flywheel is visible:** after warming on q0, the with-arm answers **every** later question with a
+single `ask_live_memory` call and reads **zero** codebase tokens (q1–q5: **−100%**), while the cold arm
+re-reads 35–41k each time. The more questions in a session, the more the q0 warm-up amortizes.
+
+**Honest caveat:** premium **$ total is flat (+3%)** in this run — each question is a *separate, short*
+`claude -p` session (~5 turns), so its premium is dominated by fixed prompt/tool/turn cache-read
+(~93k/question in *both* arms) and the offloaded codebase-reading is a smaller $ slice. So compounding
+shows cleanly in the **mechanism** (read_tok — the low-variance, attributable metric) but doesn't move
+total-$ here — the recurring pattern that total-$ is cache-read-dominated and noisy. (1 rep; read_tok
+is the reliable signal.)
+
+**Bottom line across both:** accumulation across a sequence **compounds the reading-offload**, and more
+cleanly in the understanding-bound regime (reads → 0 and stay there) than the edit-bound one (noisy
+−38%). Converting that to $ still depends on the read-fraction of premium — which is why the proven
+headline remains the single understanding-bound A/B (**−42% premium $/turn**).
 
 ## 1. Live Memory prefix-cache fix (verified, landed)
 
