@@ -1,0 +1,71 @@
+[
+ {
+  "id": "bug1",
+  "type": "bug",
+  "title": "Long-context pricing wrongly applied exactly at the token threshold",
+  "prompt": "In the cost/pricing subsystem, API cost is computed wrong for requests whose input token count lands EXACTLY on a model's long-context pricing threshold. Models with `longContextPricing` should switch to the multiplied prices only when STRICTLY ABOVE `thresholdTokens`; a request exactly at the threshold must still bill at base rates, but right now it is over-charged. An existing test pins the correct boundary behavior and is currently red: `utils/__tests__/cost.spec.ts` > \"should not apply long-context pricing at the threshold\". Trace from that failing assertion back through the cost calculation to the pricing decision and make the boundary case use base pricing again, without changing the strictly-above-threshold behavior. Keep the change minimal and localized. Do NOT run pnpm install or any build; just edit source and run the targeted test.",
+  "spec": "utils/__tests__/cost.spec.ts",
+  "setup_patch": "diff --git a/src/shared/cost.ts b/src/shared/cost.ts\nindex 18f572781..f583319f2 100644\n--- a/src/shared/cost.ts\n+++ b/src/shared/cost.ts\n@@ -9,7 +9,7 @@ export interface ApiCostResult {\n \n function applyLongContextPricing(modelInfo: ModelInfo, totalInputTokens: number, serviceTier?: ServiceTier): ModelInfo {\n \tconst pricing = modelInfo.longContextPricing\n-\tif (!pricing || totalInputTokens <= pricing.thresholdTokens) {\n+\tif (!pricing || totalInputTokens < pricing.thresholdTokens) {\n \t\treturn modelInfo\n \t}\n \n",
+  "trace_files": [
+   "src/utils/__tests__/cost.spec.ts",
+   "src/shared/cost.ts",
+   "packages/types/src/model.ts"
+  ],
+  "edit_files": [
+   "src/shared/cost.ts"
+  ],
+  "accept_cmd": "cd src && pnpm vitest run utils/__tests__/cost.spec.ts && pnpm check-types"
+ },
+ {
+  "id": "bug2",
+  "type": "bug",
+  "title": "Command auto-approval no longer inspects $(...) subshells",
+  "prompt": "In the command auto-approval / permissions subsystem, a shell command that embeds a command substitution is being auto-approved even though the substituted command is NOT on the allowlist. With an allowlist of [\"node\",\"echo\"], the command `echo $(whoami)` should resolve to \"ask_user\" (whoami is not allowed) but is currently reported as \"auto_approve\" \u2014 a real safety hole. The existing test encoding this is red: `core/auto-approval/__tests__/commands.spec.ts` > \"should ask user for echo $(whoami) because subshell whoami is not in the allowlist\". Start from the failing assertion, trace how a command string is split into sub-commands before each is checked, and find why the $(...) subshell is no longer surfaced as its own sub-command. Fix the root cause with a minimal change; other cases in that spec must stay green. Do NOT run pnpm install or any build; just edit source and run the targeted test.",
+  "spec": "core/auto-approval/__tests__/commands.spec.ts",
+  "setup_patch": "diff --git a/src/shared/parse-command.ts b/src/shared/parse-command.ts\nindex a8d87b76a..28bf74bae 100644\n--- a/src/shared/parse-command.ts\n+++ b/src/shared/parse-command.ts\n@@ -159,7 +159,7 @@ function parseCommandLine(command: string): string[] {\n \t\t\t}\n \t\t} else if (typeof token === \"string\") {\n \t\t\t// Check if it's a subshell placeholder\n-\t\t\tconst subshellMatch = token.match(/__SUBSH_(\\d+)__/)\n+\t\t\tconst subshellMatch = token.match(/__SUBSHELL_(\\d+)__/)\n \t\t\tif (subshellMatch) {\n \t\t\t\tif (currentCommand.length > 0) {\n \t\t\t\t\tcommands.push(currentCommand.join(\" \"))\n",
+  "trace_files": [
+   "src/core/auto-approval/__tests__/commands.spec.ts",
+   "src/core/auto-approval/commands.ts",
+   "src/shared/parse-command.ts"
+  ],
+  "edit_files": [
+   "src/shared/parse-command.ts"
+  ],
+  "accept_cmd": "cd src && pnpm vitest run core/auto-approval/__tests__/commands.spec.ts && pnpm check-types"
+ },
+ {
+  "id": "feat1",
+  "type": "feature",
+  "title": "Allow tool-group names in a mode's tools_denied list",
+  "prompt": "In the tool-permission subsystem, custom modes can list individual tool names in `tools_denied` to block them even when a tool group would otherwise allow them. Add the ability to also put a whole TOOL GROUP name in `tools_denied` (e.g. \"read\", \"write\"), which must block EVERY tool belonging to that group (including custom tools registered under the group). Denial keeps its current priority (overrides group membership and tools_allowed). A failing test in `src/core/tools/__tests__/validateToolUse.spec.ts` (\"tools_denied supports group names to deny an entire group\") pins the exact required behavior \u2014 make it pass WITHOUT modifying the test, keeping all other tests in that spec green. To understand how a group is declared and how a tool resolves to its group, study the permission logic and the group definitions. Keep the change small and localized. Do NOT run pnpm install or any build; just edit source and run the targeted test.",
+  "spec": "core/tools/__tests__/validateToolUse.spec.ts",
+  "setup_patch": "diff --git a/src/core/tools/__tests__/validateToolUse.spec.ts b/src/core/tools/__tests__/validateToolUse.spec.ts\nindex 687547b43..e8c0469d9 100644\n--- a/src/core/tools/__tests__/validateToolUse.spec.ts\n+++ b/src/core/tools/__tests__/validateToolUse.spec.ts\n@@ -186,6 +186,21 @@ describe(\"mode-validator\", () => {\n \t\t\t\texpect(isToolAllowedForMode(\"write_to_file\", \"deny-mode\", customModes)).toBe(false)\n \t\t\t})\n \n+\t\t\tit(\"tools_denied supports group names to deny an entire group\", () => {\n+\t\t\t\tconst customModes: ModeConfig[] = [\n+\t\t\t\t\t{\n+\t\t\t\t\t\tslug: \"group-deny-mode\",\n+\t\t\t\t\t\tname: \"Group Deny Mode\",\n+\t\t\t\t\t\troleDefinition: \"Custom role\",\n+\t\t\t\t\t\ttools: [\"read\", \"write\"],\n+\t\t\t\t\t\ttools_denied: [\"read\"],\n+\t\t\t\t\t} as ModeConfig,\n+\t\t\t\t]\n+\t\t\t\texpect(isToolAllowedForMode(\"read_file\", \"group-deny-mode\", customModes)).toBe(false)\n+\t\t\t\texpect(isToolAllowedForMode(\"grep_search\", \"group-deny-mode\", customModes)).toBe(false)\n+\t\t\t\texpect(isToolAllowedForMode(\"write_to_file\", \"group-deny-mode\", customModes)).toBe(true)\n+\t\t\t})\n+\n \t\t\tit(\"tools_denied takes priority over tools_allowed\", () => {\n \t\t\t\tconst customModes: ModeConfig[] = [\n \t\t\t\t\t{\n",
+  "trace_files": [
+   "src/core/tools/validateToolUse.ts",
+   "src/core/tools/__tests__/validateToolUse.spec.ts",
+   "src/shared/tools.ts",
+   "packages/types/src/tool.ts",
+   "src/shared/modes.ts"
+  ],
+  "edit_files": [
+   "src/core/tools/validateToolUse.ts"
+  ],
+  "accept_cmd": "cd src && pnpm vitest run core/tools/__tests__/validateToolUse.spec.ts && pnpm check-types"
+ },
+ {
+  "id": "feat2",
+  "type": "feature",
+  "title": "Default-value syntax for support-prompt placeholders",
+  "prompt": "The prompts subsystem renders support-prompt templates by substituting `${key}` placeholders from a params object; unknown keys become an empty string. Add bash-style DEFAULT-VALUE placeholders: `${key:-default text}` \u2014 if `key` is present AND its value is a non-empty string use that value, otherwise substitute the literal `default text`. Plain `${key}` must keep its exact current behavior (missing key => empty string). A failing test in `src/shared/__tests__/support-prompts.spec.ts` (\"default-value placeholder syntax\") pins the required behavior \u2014 make it pass WITHOUT modifying the test, keeping all other tests green. Study how templates are rendered and how a custom template flows through the support-prompt API so the change stays in the single rendering function. Do NOT run pnpm install or any build; just edit source and run the targeted test.",
+  "spec": "shared/__tests__/support-prompts.spec.ts",
+  "setup_patch": "diff --git a/src/shared/__tests__/support-prompts.spec.ts b/src/shared/__tests__/support-prompts.spec.ts\nindex a8eeb498f..3dcb4212a 100644\n--- a/src/shared/__tests__/support-prompts.spec.ts\n+++ b/src/shared/__tests__/support-prompts.spec.ts\n@@ -203,6 +203,25 @@ describe(\"Code Action Prompts\", () => {\n \t\t})\n \t})\n \n+\tdescribe(\"default-value placeholder syntax\", () => {\n+\t\tit(\"uses the default when the parameter is missing\", () => {\n+\t\t\tconst prompt = supportPrompt.create(\"EXPLAIN\", { selectedText: testCode }, { EXPLAIN: \"Name: ${name:-Anonymous}\" })\n+\t\t\texpect(prompt).toBe(\"Name: Anonymous\")\n+\t\t})\n+\t\tit(\"uses the provided value instead of the default\", () => {\n+\t\t\tconst prompt = supportPrompt.create(\"EXPLAIN\", { name: \"Bob\" }, { EXPLAIN: \"Name: ${name:-Anonymous}\" })\n+\t\t\texpect(prompt).toBe(\"Name: Bob\")\n+\t\t})\n+\t\tit(\"uses the default when the provided value is an empty string\", () => {\n+\t\t\tconst prompt = supportPrompt.create(\"EXPLAIN\", { name: \"\" }, { EXPLAIN: \"Name: ${name:-Anonymous}\" })\n+\t\t\texpect(prompt).toBe(\"Name: Anonymous\")\n+\t\t})\n+\t\tit(\"keeps a plain placeholder (no default) empty when missing\", () => {\n+\t\t\tconst prompt = supportPrompt.create(\"EXPLAIN\", {}, { EXPLAIN: \"Value: [${name}]\" })\n+\t\t\texpect(prompt).toBe(\"Value: []\")\n+\t\t})\n+\t})\n+\n \tdescribe(\"get template\", () => {\n \t\tit(\"should return default template when no custom prompts provided\", () => {\n \t\t\tconst template = supportPrompt.get(undefined, \"EXPLAIN\")\n",
+  "trace_files": [
+   "src/shared/support-prompt.ts",
+   "src/shared/__tests__/support-prompts.spec.ts"
+  ],
+  "edit_files": [
+   "src/shared/support-prompt.ts"
+  ],
+  "accept_cmd": "cd src && pnpm vitest run shared/__tests__/support-prompts.spec.ts && pnpm check-types"
+ }
+]
