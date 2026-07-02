@@ -6,8 +6,9 @@
       "name": "live-memory",
       "source": "./",
       "description": "Persistent, long-context, read-only codebase Q&A companion. A cheap large-context model accumulates codebase knowledge across sessions; agents ask it via the ask_live_memory MCP tool instead of re-reading the whole repo.",
-      "homepage": "https://github.com/shofer-dev",
-      "repository": "https://github.com/shofer-dev/claude-code-live-memory"
+      "homepage": "https://github.com/shofer-dev/claude-code-live-memory",
+      "repository": "https://github.com/shofer-dev/claude-code-live-memory",
+      "license": "Apache-2.0"
     }
   ]
 }

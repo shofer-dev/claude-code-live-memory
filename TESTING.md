@@ -49,10 +49,14 @@ pytest -m "not integration" -q   # unit only (faster; no subprocess/ports)
 ```
 
 Most are **mocked unit tests** (fake LLM, mocked httpx/credentials) covering token
-budgeting, context-window eviction + threshold compaction, the SHA-256 store, the
-path-jailed tools, queue/concurrency, fork-join commit, async jobs, keep-warm
-eligibility, pricing overrides, OpenAI-compat conversion + OAuth refresh, config
-layering, and the full agent loop. No API key or network required.
+budgeting, context-window eviction + threshold compaction (high/low-watermark
+hysteresis), **passive ingestion** (content teeing, freshness/invalidation, tier-0
+distillation), the **cold-start grounding guard** (force-explore when the memory is
+cold), the SHA-256 store, the path-jailed tools, queue/concurrency, fork-join commit
+(incl. linear-compaction commit), async jobs, keep-warm eligibility, pricing overrides,
+OpenAI-compat conversion + OAuth refresh, config layering, and the full agent loop —
+see `tests/test_passive.py` for the passive-ingestion / compaction / guard suite. No
+API key or network required.
 
 There is also one **integration test** (`tests/test_integration.py`, marked
 `integration`) that launches the **real `python -m live_memory` server** pointed

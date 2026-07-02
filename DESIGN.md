@@ -189,7 +189,10 @@ Claude calls ask_live_memory(question, cwd, timeout)   (mandatory soft timeout; 
       → build stable prefix (system prompt + directory tree + knowledge ledger + file-context manifest)
       → agent loop (max 25 iterations, bounded by the soft deadline):
           → llm_client.chat(system, messages, tools, cache_control)   ← raw call; server controls the array
-          → if no tool calls → final answer, break
+          → if no tool calls → final answer, break — UNLESS the memory is COLD (no observed file
+            content in-window + ~empty ledger): reject that answer once and force one Grep/Read pass,
+            so a cold cheap model grounds instead of confabulating exact values (warm memory is
+            unaffected; toggle via `force_explore_when_cold`)
           → execute read-only tool calls (path-jailed), append results
           → enforce budget (evict file contexts; preserve in-flight tool turns)
       → on soft-deadline: stop the loop, take the best-effort answer so far (return BEFORE the hard MCP timeout)
