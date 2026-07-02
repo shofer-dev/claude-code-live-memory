@@ -1,6 +1,9 @@
 {
   "name": "shofer",
   "owner": { "name": "shofer.dev" },
+  "metadata": {
+    "description": "shofer.dev's Claude Code plugins. Includes live-memory — a cheap, persistent, read-only codebase memory your agent queries via ask_live_memory instead of re-reading files."
+  },
   "plugins": [
     {
       "name": "live-memory",
