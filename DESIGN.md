@@ -1,6 +1,6 @@
 # Live Memory — Claude Code Plugin Design
 
-**Live Memory** is a persistent, long-context, read-only codebase Q&A companion, packaged as a standalone **Claude Code plugin**. It is self-contained and depends on no other project. (The idea draws on prior art in persistent agent memory; this is an independent implementation.)
+**Live Memory** is a persistent, long-context, read-only codebase Q&A companion, packaged as a standalone **Claude Code plugin**. It is self-contained and depends on no other project.
 
 ## Motivation
 
@@ -324,7 +324,7 @@ Graceful shutdown + snapshot flush; abort propagation through queue and LLM call
 1. **Server hosting** — systemd service vs container sidecar vs other supervisor. Either works; the requirement is an **externally-supervised, always-on, idempotent singleton** (HTTP transport needs it pre-running; Claude Code will not start it, and a `SessionStart`-lazy-launch races the MCP connection). A `SessionStart` health-check-and-wait is acceptable only as a backstop. **Env wrinkle:** since the server is a separate process (not spawned by Claude Code), the supervisor must hand it the **same provider env Claude Code uses** (`ANTHROPIC_BASE_URL` / auth, or Bedrock/Vertex) so both hit the same backend.
 2. **Semantic search** — optionally add a `rag_search` tool backed by an embeddings index, or stay limited to ripgrep/glob/git. (Omitted in the initial build — no host dependency.)
 3. **Summary model** — use the same BYOM model for the neutral summary, or a separately-configured cheaper one? (The server owns this call, so either is trivial.)
-4. **Token counting** — `count_tokens` round-trip (accurate, adds latency) vs `chars/≈4` heuristic reconciled against `usage` (cheap, approximate — the chosen default).
+4. **Token counting** — `count_tokens` round-trip (accurate, adds latency) vs `chars/≈4` heuristic reconciled against `usage` (cheap, approximate — the chosen default). **Decided — see [Appendix A](#appendix-a--token-counting-decision).**
 
 ---
 
@@ -334,3 +334,36 @@ Graceful shutdown + snapshot flush; abort propagation through queue and LLM call
 - Claude Code hooks (`PostToolUse`, `FileChanged`): https://docs.claude.com/en/docs/claude-code/hooks
 - Claude Code MCP: https://docs.claude.com/en/docs/claude-code/mcp
 - Claude Code subagents (rejected for this use): https://docs.claude.com/en/docs/claude-code/sub-agents
+
+---
+
+## Appendix A — Token counting (decision)
+
+**Decision: keep the `chars/≈4` heuristic (`models.estimate_tokens`, `CHARS_PER_TOKEN=4`) as the
+budget unit; do NOT add a `count_tokens` round-trip.** Anthropic ships no local tokenizer, so the
+window budget (compaction trigger/floor, LRU eviction, directory-tree cap, `/stats` fill%) is
+estimated from character length and treated as **soft** — being off by ±10–15% only makes compaction
+fire slightly early/late; it is never a correctness input.
+
+**Why not `count_tokens` (exact, server-side):**
+- **Impedance mismatch.** `count_tokens` returns one integer for a *whole request*; the budget code
+  needs *per-item* sizes to choose what to evict. Exact per-item counting = N round-trips.
+- **Latency.** ~100–300 ms per call on the question hot path (once per question at least; more if
+  per-item), for a bound that's already soft.
+- **Provider asymmetry.** Only the `anthropic` provider has the endpoint; OpenAI-compatible
+  (DeepSeek, local, gateways) would still fall back to a heuristic/`tiktoken` (itself approximate for
+  non-OpenAI tokenizers). Exactness would be Anthropic-only.
+- **Availability.** `count_tokens` has its own rate limit and it's unverified whether the subscription
+  OAuth token authorizes it — so it could never be a hard dependency anyway.
+
+**What we rely on instead:** every `chat()` response already returns `usage.input_tokens` — the exact
+size of what was just sent — so the heuristic is *reconciled against ground truth for free* after each
+call. The one case exactness truly prevents (overflowing the model's **hard** context limit) is best
+handled **reactively**: catch the "prompt too long" error, compact, retry — cheaper than proactively
+counting every query.
+
+**If more precision is ever wanted (higher-ROI than `count_tokens`):** self-calibrate
+`CHARS_PER_TOKEN` per workspace/model from observed `usage` (e.g. an EMA of actual÷estimated) — turns
+the ±15% heuristic into ±few-% with zero added latency and no provider asymmetry. Reserve an actual
+`count_tokens` call, if ever, for a *single* boundary check only when the heuristic says we're within
+~10–15% of the hard limit.
