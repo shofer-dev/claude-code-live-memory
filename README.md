@@ -10,10 +10,12 @@ extra reading) and stays current as the repo changes.
 > its codebase-reading tokens** and cost **~42% less per turn**, with *lower cost variance*.
 > Edit/execution-heavy work is roughly break-even. Full numbers: [`benchmark/results/RESULTS.md`](./benchmark/results/RESULTS.md).
 
-Part of the **shofer** Claude Code plugin family (with
+**Lineage:** Live Memory began as a feature of **[shofer.dev](https://shofer.dev)** (Arkware's
+parallel multi-agent coding platform), where sessions share an in-sync codebase memory. This is that
+idea as a **standalone Claude Code plugin** — a fresh implementation, self-contained, with no
+dependency on shofer. Part of the **shofer** Claude Code plugin family (with
 [slang-workflows](https://github.com/shofer-dev/claude-code-slang-orchestrator)).
-Design: [`DESIGN.md`](./DESIGN.md) · Testing: [`TESTING.md`](./TESTING.md). Standalone — no dependency
-on any other project.
+Design: [`DESIGN.md`](./DESIGN.md) · Testing: [`TESTING.md`](./TESTING.md).
 
 ## Quickstart
 
