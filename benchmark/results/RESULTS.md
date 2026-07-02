@@ -170,24 +170,26 @@ reading stays gone, so the building model's **cost drops −61% per task** and i
 
 The all-in win widens as the companion gets cheaper **only if the cheap model stays accurate** — a
 cheap-but-dumb model that confabulates would be worse than useless. Head-to-head on the 15-question
-accuracy set (12 factual + 3 hallucination-traps, **warm**, LLM-judged, same repo), swapping **only** the
-companion model behind the identical `ask_live_memory` path (`results/cheap_model/`):
+accuracy set (12 factual + 3 hallucination-traps, **warm**, LLM-judged, same repo), **×3 reps (n=45)**,
+swapping **only** the companion model behind the identical `ask_live_memory` path (`results/cheap_model/`):
 
-| companion (warm, 15 Q) | correct | hallucinated | negative traps | price $/M (in·out) | cheap-side $/task¹ | all-in¹ |
+| companion (warm, 45 = 15 Q × 3 reps) | correct | hallucinated | negative traps | price $/M (in·out) | cheap-side $/task¹ | all-in¹ |
 |---|---|---|---|---|---|---|
-| **deepseek-v4-flash** | **15/15 (100%)** | **0** | 3/3 | 0.14 · 0.28 | **$0.029** | **−57%** |
-| claude-haiku-4-5 | 14/15 (93%) | 1 | 3/3 | 1.00 · 5.00 | $0.229 | −25% |
+| **deepseek-v4-flash** | **44/45 (98%)** | **1 (2%)** | 9/9 | 0.14 · 0.28 | **$0.029** | **−57%** |
+| claude-haiku-4-5 | 41/45 (91%) | 4 (9%) | 9/9 | 1.00 · 5.00 | $0.229 | −25% |
 
 ¹ cheap-side priced on the understanding-bound run's **actual** token profile at each model's rate;
 all-in = building-model $0.247 + cheap-side, vs without $0.639. (deepseek reached via an OpenAI-compatible
-router; Haiku via subscription OAuth — the real default. n=15, single run.)
+router; Haiku via subscription OAuth — the real default. Per-rep correct: deepseek 15/15/14, Haiku 14/13/14.)
 
-**deepseek-v4-flash (~8× cheaper per token) matches Haiku's accuracy** — it actually edges it here (100%
-vs 93%; read as "clears the Haiku bar," not "beats it," at n=15) with **zero hallucinations on the
-negative traps** (the real capability risk). Its ~8× lower price pushes the **all-in saving from −25% →
-−57%**, nearly the full **−61%** building-model saving. This is the measured basis for condition #2: a
-cheap-but-capable companion (deepseek-flash — or a local model, ≈ free) makes the all-in number approach
-the building-model win. The companion model is server config (env / `/live-memory-config`), not per-call.
+**deepseek-v4-flash (~8× cheaper per token) matches — and slightly edges — Haiku's accuracy** over 3 reps
+(**98% vs 91%**, and **fewer hallucinations: 1 vs 4**), with **both perfect on the negative traps** (9/9,
+the real capability risk). The single shared failure mode is one hard numeric fact (`max_context_tokens`)
+that either model can miss when it answers warm without re-reading — not a harness fault (the reruns had
+0 errors). Its ~8× lower price pushes the **all-in saving from −25% → −57%**, nearly the full **−61%**
+building-model saving. This is the measured basis for condition #2: a cheap-but-capable companion
+(deepseek-flash — or a local model, ≈ free) makes the all-in number approach the building-model win. The
+companion model is server config (env / `/live-memory-config`), not per-call.
 
 ## UNDERSTANDING-BOUND task — RE-RUN with passive ingestion ON (+ compaction fixes)
 
@@ -260,11 +262,15 @@ the 4 features) is excluded — folding it in trims the cumulative saving to ~�
 
 **Smaller than the understanding-bound win** (building-model **−24%/task** here vs **−61%** there):
 feature work is execution-bound — the agent must read the exact files it edits (sometimes with 0 LM
-calls), and turns are driven by the edit-check-iterate loop. It's also **noisy** (with-arm read_tok
-across the 3 reps: 62k / 39k / 65k). But it is **not** break-even: because the sequence **warms once and
-reuses**, the companion cost amortizes and the all-in saving holds at **−15% cost / −27% wall-time per
-task** — which is why a *warm-amortized* edit sequence can out-save the *cold-per-task* hybrid A/B above.
-Confirms the structural finding: Live Memory makes *understanding* cheaper more than *execution*.
+calls), and turns are driven by the edit-check-iterate loop. It's also **noisy** — both in reading
+(with-arm read_tok across the 3 reps: 62k / 39k / 65k) and, importantly, **in wall-time**: the aggregate
+**−27%** is **not** uniform across reps — rep1 was actually *slower* with memory (151 s → 183 s) and the
+mean is carried mostly by rep3 (680 s → 344 s). So treat **−27% wall-time / −15% cost** as a *directional*
+per-task figure with wide rep spread (3 reps), not a tight estimate. But it is **not** break-even on the
+mean: because the sequence **warms once and reuses**, the companion cost amortizes and the all-in saving
+holds at **−15% cost / −27% wall-time per task** — which is why a *warm-amortized* edit sequence can
+out-save the *cold-per-task* hybrid A/B above. Confirms the structural finding: Live Memory makes
+*understanding* cheaper more than *execution*.
 
 ### Understanding-bound sequence (1 rep) — compounding DOES show (on the mechanism)
 `harness/run_understanding_sequence.sh` — 6 **distinct**, read-only comprehension questions across
