@@ -166,6 +166,29 @@ reading stays gone, so the building model's **cost drops −61% per task** and i
 > cheap enough — which on a genuinely understanding-heavy task it is.** On edit-heavy work the building
 > cost moves less, so the win shrinks (see the sequence below).
 
+### Cheap-model capability — is a *cheaper* companion still accurate enough? (deepseek-v4-flash vs Haiku)
+
+The all-in win widens as the companion gets cheaper **only if the cheap model stays accurate** — a
+cheap-but-dumb model that confabulates would be worse than useless. Head-to-head on the 15-question
+accuracy set (12 factual + 3 hallucination-traps, **warm**, LLM-judged, same repo), swapping **only** the
+companion model behind the identical `ask_live_memory` path (`results/cheap_model/`):
+
+| companion (warm, 15 Q) | correct | hallucinated | negative traps | price $/M (in·out) | cheap-side $/task¹ | all-in¹ |
+|---|---|---|---|---|---|---|
+| **deepseek-v4-flash** | **15/15 (100%)** | **0** | 3/3 | 0.14 · 0.28 | **$0.029** | **−57%** |
+| claude-haiku-4-5 | 14/15 (93%) | 1 | 3/3 | 1.00 · 5.00 | $0.229 | −25% |
+
+¹ cheap-side priced on the understanding-bound run's **actual** token profile at each model's rate;
+all-in = building-model $0.247 + cheap-side, vs without $0.639. (deepseek reached via an OpenAI-compatible
+router; Haiku via subscription OAuth — the real default. n=15, single run.)
+
+**deepseek-v4-flash (~8× cheaper per token) matches Haiku's accuracy** — it actually edges it here (100%
+vs 93%; read as "clears the Haiku bar," not "beats it," at n=15) with **zero hallucinations on the
+negative traps** (the real capability risk). Its ~8× lower price pushes the **all-in saving from −25% →
+−57%**, nearly the full **−61%** building-model saving. This is the measured basis for condition #2: a
+cheap-but-capable companion (deepseek-flash — or a local model, ≈ free) makes the all-in number approach
+the building-model win. The companion model is server config (env / `/live-memory-config`), not per-call.
+
 ## UNDERSTANDING-BOUND task — RE-RUN with passive ingestion ON (+ compaction fixes)
 
 Same read-only trace task, after landing **passive (organic) population** (the agent's

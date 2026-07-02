@@ -1,0 +1,26 @@
+(warmed: teed 8 files passively — realistic already-in-use state)
+[LM]     Q 1 correct   grounded=True  reads=1 :: What is the default port the server listens on?
+[LM]     Q 2 correct   grounded=True  reads=0 :: What is the default value of compaction_floor, and what 
+[LM]     Q 3 incorrect grounded=False reads=0 :: What is the default max_context_tokens?
+        judge: Answer says 200000, reference says 128000 | ans: The default `max_context_tokens` is **200000**.
+
+This can be overridden via the `LIVE_MEMORY_MAX_CONTEXT_TOKENS` environ
+[LM]     Q 4 correct   grounded=True  reads=0 :: Which env var toggles passive ingestion, and what is its
+[LM]     Q 5 correct   grounded=True  reads=0 :: Which method evicts file contexts and with what eviction
+[LM]     Q 6 correct   grounded=True  reads=0 :: List the compaction tiers in _maybe_compact, in order.
+[LM]     Q 7 correct   grounded=True  reads=0 :: How is a cwd canonicalized into the workspace key?
+[LM]     Q 8 correct   grounded=True  reads=0 :: With no API key but a Claude subscription present, what 
+[LM]     Q 9 correct   grounded=True  reads=0 :: Which FileContext fields are excluded from the persisted
+[LM]     Q10 correct   grounded=True  reads=0 :: What does clear_content do to a file context?
+[LM]     Q11 correct   grounded=True  reads=0 :: Which read-only tool(s) count as a 'file read' for stale
+[LM]     Q12 correct   grounded=True  reads=0 :: What are the arguments to the ask_live_memory tool?
+[LM] NEG Q13 correct   grounded=True  reads=0 :: Does live-memory support a Redis backend for storing its
+[LM] NEG Q14 correct   grounded=True  reads=0 :: Can the live-memory agent modify or write files in the r
+[LM] NEG Q15 correct   grounded=True  reads=0 :: Does ask_live_memory take a `model` parameter to pick th
+
+== live-memory (WARM) (n=15) ==
+  correct 14/15 (93%) · partial 0 · incorrect 1 · hallucinated(ungrounded) 1 (7%)
+  negatives (no-hallucination) 3/3 correct
+  answered with 0 file reads: 14/15; avg reads 0.1
+
+(judge is an LLM — treat verdicts as high-signal, not ground truth; spot-check incorrect/ungrounded rows.)

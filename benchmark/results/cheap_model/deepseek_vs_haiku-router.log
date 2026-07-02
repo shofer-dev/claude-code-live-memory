@@ -1,0 +1,64 @@
+########## DEEPSEEK-V4-FLASH (WARM) ##########
+(warmed: teed 8 files passively — realistic already-in-use state)
+[LM]     Q 1 correct   grounded=True  reads=0 :: What is the default port the server listens on?
+[LM]     Q 2 correct   grounded=True  reads=1 :: What is the default value of compaction_floor, and what 
+[LM]     Q 3 correct   grounded=True  reads=1 :: What is the default max_context_tokens?
+[LM]     Q 4 correct   grounded=True  reads=0 :: Which env var toggles passive ingestion, and what is its
+[LM]     Q 5 correct   grounded=True  reads=0 :: Which method evicts file contexts and with what eviction
+[LM]     Q 6 correct   grounded=True  reads=0 :: List the compaction tiers in _maybe_compact, in order.
+[LM]     Q 7 correct   grounded=True  reads=0 :: How is a cwd canonicalized into the workspace key?
+[LM]     Q 8 correct   grounded=True  reads=0 :: With no API key but a Claude subscription present, what 
+[LM]     Q 9 correct   grounded=True  reads=0 :: Which FileContext fields are excluded from the persisted
+[LM]     Q10 correct   grounded=True  reads=0 :: What does clear_content do to a file context?
+[LM]     Q11 correct   grounded=True  reads=0 :: Which read-only tool(s) count as a 'file read' for stale
+[LM]     Q12 correct   grounded=True  reads=0 :: What are the arguments to the ask_live_memory tool?
+[LM] NEG Q13 correct   grounded=True  reads=1 :: Does live-memory support a Redis backend for storing its
+[LM] NEG Q14 correct   grounded=True  reads=0 :: Can the live-memory agent modify or write files in the r
+[LM] NEG Q15 correct   grounded=True  reads=0 :: Does ask_live_memory take a `model` parameter to pick th
+
+== live-memory (WARM) (n=15) ==
+  correct 15/15 (100%) · partial 0 · incorrect 0 · hallucinated(ungrounded) 0 (0%)
+  negatives (no-hallucination) 3/3 correct
+  answered with 0 file reads: 12/15; avg reads 0.2
+
+(judge is an LLM — treat verdicts as high-signal, not ground truth; spot-check incorrect/ungrounded rows.)
+
+########## HAIKU-4.5 (WARM) ##########
+(warmed: teed 8 files passively — realistic already-in-use state)
+[LM]     Q 1 incorrect grounded=False reads=-1 :: What is the default port the server listens on?
+        judge: Answer is an error, not a factual response | ans: Error: the Live Memory failed to answer: Client error '400 Bad Request' for url 'http://127.0.0.1:30081/v1/chat/completi
+[LM]     Q 2 incorrect grounded=False reads=-1 :: What is the default value of compaction_floor, and what 
+        judge: Error response, no answer provided | ans: Error: the Live Memory failed to answer: Client error '400 Bad Request' for url 'http://127.0.0.1:30081/v1/chat/completi
+[LM]     Q 3 incorrect grounded=False reads=-1 :: What is the default max_context_tokens?
+        judge: Answer is an error, not a factual response | ans: Error: the Live Memory failed to answer: Client error '400 Bad Request' for url 'http://127.0.0.1:30081/v1/chat/completi
+[LM]     Q 4 incorrect grounded=False reads=-1 :: Which env var toggles passive ingestion, and what is its
+        judge: Answer is an error, not an answer | ans: Error: the Live Memory failed to answer: Client error '400 Bad Request' for url 'http://127.0.0.1:30081/v1/chat/completi
+[LM]     Q 5 incorrect grounded=False reads=-1 :: Which method evicts file contexts and with what eviction
+        judge: Answer is an error, not a response | ans: Error: the Live Memory failed to answer: Client error '400 Bad Request' for url 'http://127.0.0.1:30081/v1/chat/completi
+[LM]     Q 6 incorrect grounded=False reads=-1 :: List the compaction tiers in _maybe_compact, in order.
+        judge: Error response, no answer provided about compaction tiers | ans: Error: the Live Memory failed to answer: Client error '400 Bad Request' for url 'http://127.0.0.1:30081/v1/chat/completi
+[LM]     Q 7 incorrect grounded=False reads=-1 :: How is a cwd canonicalized into the workspace key?
+        judge: Answer is an error, not an answer | ans: Error: the Live Memory failed to answer: Client error '400 Bad Request' for url 'http://127.0.0.1:30081/v1/chat/completi
+[LM]     Q 8 incorrect grounded=False reads=-1 :: With no API key but a Claude subscription present, what 
+        judge: Answer is an error, not an answer to the question | ans: Error: the Live Memory failed to answer: Client error '400 Bad Request' for url 'http://127.0.0.1:30081/v1/chat/completi
+[LM]     Q 9 incorrect grounded=False reads=-1 :: Which FileContext fields are excluded from the persisted
+        judge: Answer is an error, not a substantive response | ans: Error: the Live Memory failed to answer: Client error '400 Bad Request' for url 'http://127.0.0.1:30081/v1/chat/completi
+[LM]     Q10 incorrect grounded=False reads=-1 :: What does clear_content do to a file context?
+        judge: Answer is an error, not a response about clear_content | ans: Error: the Live Memory failed to answer: Client error '400 Bad Request' for url 'http://127.0.0.1:30081/v1/chat/completi
+[LM]     Q11 incorrect grounded=False reads=-1 :: Which read-only tool(s) count as a 'file read' for stale
+        judge: Answer is an error, not a substantive response | ans: Error: the Live Memory failed to answer: Client error '400 Bad Request' for url 'http://127.0.0.1:30081/v1/chat/completi
+[LM]     Q12 incorrect grounded=False reads=-1 :: What are the arguments to the ask_live_memory tool?
+        judge: Answer is an error message, not an answer | ans: Error: the Live Memory failed to answer: Client error '400 Bad Request' for url 'http://127.0.0.1:30081/v1/chat/completi
+[LM] NEG Q13 incorrect grounded=False reads=-1 :: Does live-memory support a Redis backend for storing its
+        judge: Answer is an error, not a valid response | ans: Error: the Live Memory failed to answer: Client error '400 Bad Request' for url 'http://127.0.0.1:30081/v1/chat/completi
+[LM] NEG Q14 incorrect grounded=False reads=-1 :: Can the live-memory agent modify or write files in the r
+        judge: Error response; no answer provided about file modification | ans: Error: the Live Memory failed to answer: Client error '400 Bad Request' for url 'http://127.0.0.1:30081/v1/chat/completi
+[LM] NEG Q15 incorrect grounded=False reads=-1 :: Does ask_live_memory take a `model` parameter to pick th
+        judge: Answer is an error, not a response to the question | ans: Error: the Live Memory failed to answer: Client error '400 Bad Request' for url 'http://127.0.0.1:30081/v1/chat/completi
+
+== live-memory (WARM) (n=15) ==
+  correct 0/15 (0%) · partial 0 · incorrect 15 · hallucinated(ungrounded) 15 (100%)
+  negatives (no-hallucination) 0/3 correct
+
+(judge is an LLM — treat verdicts as high-signal, not ground truth; spot-check incorrect/ungrounded rows.)
+ALL DONE

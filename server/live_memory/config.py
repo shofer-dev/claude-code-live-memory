@@ -52,6 +52,18 @@ def _truthy(v: object) -> bool:
     return str(v).strip().lower() in ("1", "true", "yes") if v is not None else False
 
 
+def _json_dict_env(key: str) -> dict[str, Any]:
+    """Parse a JSON-object env var into a dict; empty/invalid → {}."""
+    raw = os.environ.get(key)
+    if not raw:
+        return {}
+    try:
+        d = json.loads(raw)
+        return d if isinstance(d, dict) else {}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
 def _data_dir() -> Path:
     base = os.environ.get("CLAUDE_PLUGIN_DATA") or os.environ.get("LIVE_MEMORY_DATA_DIR")
     return Path(base).expanduser() if base else Path.home() / ".claude" / "plugins" / "data" / "live-memory"
@@ -126,6 +138,10 @@ class Config:
     base_url: str = ""
     api_key: str | None = None
     model: str = ""
+    # Extra JSON fields merged into every OpenAI-compatible request body — for gateways
+    # that require non-standard fields (e.g. a `conversation_id`; value "__auto__" → a
+    # fresh per-request id). Ignored by the anthropic provider.
+    openai_extra_body: dict[str, Any] = field(default_factory=lambda: _json_dict_env("LIVE_MEMORY_OPENAI_EXTRA_BODY"))
     use_oauth: bool = False
     metered: bool = True  # whether cost is $-metered (API key) vs subscription (rate-limited)
 

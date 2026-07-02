@@ -14,6 +14,7 @@ Abort is via asyncio task cancellation.
 from __future__ import annotations
 
 import json
+import uuid
 from typing import Any, Protocol
 
 import httpx
@@ -163,7 +164,20 @@ class OpenAIClient:
             timeout=httpx.Timeout(HTTP_TIMEOUT_S, connect=HTTP_CONNECT_TIMEOUT_S),
         )
 
+    def _with_extra(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Merge cfg.openai_extra_body into the request. Some OpenAI-compatible
+        gateways require extra fields (e.g. a `conversation_id`); a value of
+        `"__auto__"` is replaced with a fresh per-request id."""
+        extra = getattr(self.cfg, "openai_extra_body", None) or {}
+        if extra:
+            payload = {**payload, **extra}
+            for key, val in extra.items():
+                if val == "__auto__":
+                    payload[key] = uuid.uuid4().hex
+        return payload
+
     async def _post(self, payload: dict[str, Any]) -> dict[str, Any]:
+        payload = self._with_extra(payload)
         r = await self._http.post("/chat/completions", json=payload)
         r.raise_for_status()
         data: dict[str, Any] = r.json()

@@ -25,6 +25,9 @@ _RATES: dict[str, tuple[float, float]] = {
     "opus": (15.00, 75.00),
     "gpt-4o-mini": (0.15, 0.60),
     "gpt-4o": (2.50, 10.00),
+    # more specific deepseek variants first (substring match is first-wins)
+    "deepseek-v4-flash": (0.14, 0.28),
+    "deepseek-v4-pro": (0.44, 0.87),
     "deepseek": (0.27, 1.10),
     "gemini-flash": (0.075, 0.30),
     "gemini-3": (1.25, 5.00),
