@@ -210,3 +210,40 @@ codebase, so it becomes a **lossy, recency/frequency-biased** summary (older fac
 **Measurement hinge:** run the understanding-bound A/B on a repo whose working set **exceeds** the
 window (or shrink the window) and track recall + premium tokens as size grows — the point where recall
 falls off is exactly where retrieval (§2) earns its keep.
+
+## 5. Push-based orientation (SessionStart core-map injection)
+
+**Idea.** Today the agent-facing surface is **pull-only**: it must decide to call `ask_live_memory`
+(nudged by the skill + tool description). A brand-new/cold session gets no benefit until the model
+thinks to ask. Add a **secondary, push** path that injects a tiny **"core map"** into a fresh
+session's context so the agent starts *oriented* — it complements, never replaces, the pull path.
+
+**Mechanism (verified against Claude Code docs).** MCP is pull-only (tools/resources/prompts enter
+context only when Claude calls them). The supported push is a **`SessionStart` hook** — which a
+plugin can ship in its `hooks/hooks.json` (matchers `startup` / `resume` / `clear` / `compact`).
+The hook prints `{"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "…"}}`
+to stdout and Claude Code injects that string into the session context, once, at start. (The
+`Notification` hook is **human-facing** — terminal/desktop alerts — not context. `Channels`
+(research preview, v2.1.80+, `--channels`) is the only true MCP push, but it's for reactive **event**
+streams, not static context injection — not a fit here.)
+
+**Shape.** A `SessionStart` hook script `curl`s a small new server route (e.g. `GET /coremap?cwd=…`)
+that returns the **always-resident core map** from §2 — repo architecture, entry points, conventions —
+*distinct from the full knowledge ledger* — and emits it as `additionalContext`. This is the §2 core
+map made *pushable*; the deep Q&A stays pull (`ask_live_memory`).
+
+**Load-bearing constraint (why this is easy to get wrong).** Whatever the hook injects lands in the
+**premium main-agent context every session** — the exact cost Live Memory exists to *avoid*. So it
+must be **tiny and high-value** (a ~100–300-token core map, never the ledger), and should:
+- gate to `startup`/`clear` only (skip `resume`/`compact`, where the agent already has context);
+- be **opt-in behind a config flag** (some users won't want unconditional premium tokens — consistent
+  with the plugin's "nothing forced into context" stance);
+- emit only once the workspace is **warm enough** to have a real core map (else it's noise).
+
+Done carelessly it just reintroduces the §0b window-bloat it's meant to sidestep.
+
+**Measurement hinge:** does a pushed core map cut the building agent's **cold-start exploration**
+(fewer initial `Read`/`Grep`, earlier/fewer `ask_live_memory` calls) by enough to justify its
+per-session premium tokens? A/B cold sessions with vs. without the injected core map, on the
+understanding-bound task — the net is (premium exploration saved) − (core-map tokens spent each
+session). Depends entirely on keeping the map small and only pushing it when it pays.
