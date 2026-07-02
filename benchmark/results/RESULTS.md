@@ -254,6 +254,64 @@ cleanly in the understanding-bound regime (reads → 0 and stay there) than the 
 −38%). Converting that to $ still depends on the read-fraction of premium — which is why the proven
 headline remains the single understanding-bound A/B (**−42% premium $/turn**).
 
+## HYBRID A/B — realistic understand-then-edit tasks (the middle regime)
+
+A real session is rarely pure Q&A — the user asks for a **bug fixed** or a **feature built**, which
+means *understand the codebase, then edit it*. `harness/run_hybrid.py` + `harness/hybrid_tasks.json`
+encode **4 such tasks** on pinned shofer `@32cdefc`, each with **objective fail→pass acceptance**
+(a hidden failing test, green at baseline, red under the task's setup patch — see the manifest):
+
+- **bug1** — long-context pricing wrongly applied *exactly at* the token threshold (`cost.ts`).
+- **bug2** — command auto-approval stops inspecting `$(...)` subshells, so `echo $(whoami)` auto-approves (`parse-command.ts`).
+- **feat1** — allow tool-**group** names in a mode's `tools_denied` (`validateToolUse.ts`).
+- **feat2** — bash-style `${key:-default}` default-value syntax in support-prompt templates (`support-prompt.ts`).
+
+Prompts are **symptom/behaviour-first and location-blind** (they describe the wrong behaviour or the
+desired API, never the file, the mechanism, or the test) so the agent must *genuinely locate and
+understand* before editing. Each task, each arm: reset pinned worktree → apply setup patch → run the
+building agent (`claude -p`, ±`ask_live_memory`, soft system-prompt nudge — the honest real-world
+config) → run the acceptance command → measure. **3 reps, 24 runs. `results/hybrid_*/`.**
+
+| task | type | adopted¹ | read_tok WO→WI | premium$ Δ | turns WO→WI |
+|---|---|---|---|---|---|
+| bug1 | bug | 0/3 | 2,612 → 1,377 (−47%) | −15% | 12.7 → 11.7 |
+| bug2 | bug | 1/3 | 7,758 → 5,782 (−25%) | −22% | 23.3 → 21.3 |
+| **feat1** | feature | **3/3** | **18,252 → 7,359 (−60%)** | **−31%** | 24.3 → 20.3 |
+| feat2 | feature | 3/3 | 5,195 → 4,477 (−14%) | −1% | 12.3 → 13.3 |
+| **cumulative** | | **7/12** | **33,816 → 18,995 (−44%)** | **−21%** | |
+
+¹ *adopted* = with-arm reps in which the agent actually called `ask_live_memory` (mean over 3 reps).
+
+**Acceptance: 12/12 both arms** — Live Memory never broke a task.
+
+**Two honest caveats that reshape the headline:**
+
+1. **Adoption is a real variable, and it tracks understanding burden.** Under a *soft* nudge (the plugin
+   approximates this, it doesn't force calls), the agent consults memory on **features 6/6** but on
+   **bugs only 1/6** — because these bug symptoms are one-keyword-greppable (`grep thresholdTokens`),
+   so the agent just greps. Where it doesn't adopt (bug1 0/3), the with/without deltas are two
+   independent runs = **noise, not signal** (bug1's read_tok is byte-identical across arms in the
+   adopted-nowhere reps). The clean signal is **feat1**: the cold arm *thrashes* to locate the
+   permission logic (18k reads, up to 28k in one rep) while the warmed arm goes straight there
+   (7k, **−60% reading, −31% premium, 24→20 turns**).
+
+2. **Net dollars ≈ wash on cold, one-shot tasks.** The **−21% premium$** does **not** survive charging
+   the Haiku inference the memory server spends answering queries: over 3 reps the premium **saving was
+   $0.820**, the **cheap-side spend was $0.833** → **net −$0.013 (≈0%)**. This is the *worst case for
+   Live Memory*: the harness **re-warms every task** (zero session compounding) yet **excludes** that
+   warm cost from `cheap$`, so `cheap$` is the pure marginal query cost — and even so it eats the
+   premium saving one-for-one on these short single-file edits.
+
+**Bottom line.** On realistic hybrid tasks measured **cold and one-shot**, Live Memory buys
+**context-window relief (−44% of the agent's reading) and fewer turns at roughly break-even dollars**;
+it **never hurts correctness**. The *dollar* case turns positive exactly where the earlier benchmarks
+already prove it does — as a **session lengthens**: the one-time warm amortizes across tasks and the
+`cache_read` offload compounds (see the understanding-bound A/B **−42% $/turn** and the
+understanding-bound *sequence* where reads go to **0 and stay there**). The hybrid regime is the honest
+**middle**: understanding-heavy work (features) reliably pulls value from memory; greppable single-file
+edits (bugs) are break-even and often don't even invoke it. Reproduce: `RUNS=/tmp/pilot/hybrid_r1
+server/.venv/bin/python -u benchmark/harness/run_hybrid.py`.
+
 ## 1. Live Memory prefix-cache fix (verified, landed)
 
 The cheap-model cost of every query was dominated by the **directory tree** (~30k

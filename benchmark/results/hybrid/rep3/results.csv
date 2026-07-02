@@ -1,0 +1,9 @@
+id,type,arm,passed,read_tok,turns,lm_calls,prem_usd,cheap_usd,status
+bug1,bug,without,True,1377,11,0,0.1235,0.0,complete
+bug1,bug,with,True,1377,11,0,0.1238,0.0,complete
+bug2,bug,without,True,6935,21,0,0.359,0.0,complete
+bug2,bug,with,True,7198,19,0,0.3194,0.0,complete
+feat1,feature,without,True,15193,25,0,0.4878,0.0,complete
+feat1,feature,with,True,7218,18,1,0.2982,0.0998,complete
+feat2,feature,without,True,5195,12,0,0.1918,0.0,complete
+feat2,feature,with,True,5195,13,1,0.1881,0.1777,complete
