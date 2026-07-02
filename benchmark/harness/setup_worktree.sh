@@ -2,8 +2,9 @@
 # Recreate a FAITHFUL shofer build-env worktree at the pinned base (cross-package
 # edits propagate to tsc; base `pnpm check-types` is clean).
 set -euo pipefail
-SH=/home/alsterg/Projects/arkware.ai/extensions/shofer
-BASE=32cdefcba07ee9afde9bf65b373a75531f015d96
+# shofer repo root: override with SHOFER_DIR for reproduction on another machine.
+SH=${SHOFER_DIR:-/home/alsterg/Projects/arkware.ai/extensions/shofer}
+BASE=${SHOFER_BASE:-32cdefcba07ee9afde9bf65b373a75531f015d96}   # pinned benchmark commit
 WT=${1:-/tmp/pilot/shofer}
 
 git -C "$SH" worktree add --detach "$WT" "$BASE" 2>/dev/null || true
