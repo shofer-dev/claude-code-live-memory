@@ -1,23 +1,43 @@
 # Live Memory — Claude Code plugin
 
 **A cheap, always-on model that learns your repo — so your agent stops re-reading it.**
-A separate large-context model runs as a long-lived MCP server and *accumulates* knowledge of your
-codebase across sessions; your agent asks it via one **read-only** tool, `ask_live_memory`, instead
-of re-reading files. It **learns passively** from your agent's own reads/edits (teed via hooks — no
-extra reading) and stays current as the repo changes.
+Live Memory runs a separate, cheap large-context model as a long-lived MCP server that accumulates
+knowledge of your codebase across sessions. Instead of re-reading the same files every session, your
+agent asks one **read-only** tool, `ask_live_memory`, the broad-understanding questions — *"where is X,
+how does Y work, what calls Z"* — and Live Memory answers in a way that **bootstraps the primary agent to
+start doing productive work** (e.g., edits). It **learns passively** from your agent's own reads and edits
+(teed via hooks — no extra reading) and stays current as the repo changes (modifications and deletions).
+Read-only and path-jailed (it can never edit, create, or run anything); zero-config on a Claude
+subscription (Haiku, no API key); the memory model is pluggable — point it at a local model or any
+OpenAI-compatible endpoint.
 
-> **A/B on a real repo (understanding-heavy work, per task, run-to-completion):** the building (premium)
-> model offloaded **~93% of its codebase-reading tokens**, cost **~61% less per task** and ran **~22%
-> faster**, with *lower cost variance*. The cheap companion is pluggable — Haiku by default, or
-> **deepseek-v4-flash**, which matched Haiku's accuracy (98% vs 91% over 3 reps) at ~8× lower token price.
-> Edit/execution-heavy work is roughly break-even. Full numbers: [`benchmark/results/RESULTS.md`](./benchmark/results/RESULTS.md).
+## Benchmarks
+
+A/B on a real repo, **cost per task, run to completion**. Cost is shown three ways: the **premium
+(building) model's bill** — what your *expensive* model spends, since the companion runs on a cheap or
+local model — and **all-in**, also counting the companion's own cost on **DeepSeek-v4-flash** or **Haiku**:
+
+| per task | premium-model bill | all-in · DeepSeek-flash† | all-in · Haiku | faster |
+|---|---|---|---|---|
+| **Understanding-heavy** (trace / comprehend) | **−61%** | **−57%** | **−25%** | **~22%** |
+| **Hybrid** (understand-then-edit: bug fixes + features) | **−28%** | **−26%** | **−11%** | **~11%** |
+| Pure edit / execution | ~break-even | ~break-even | ~break-even | ~0 |
+
+Understanding-heavy work also offloads **~93%** of the premium model's codebase-reading tokens (with lower
+cost variance), and correctness never regressed on the hybrid tasks (**12/12** passed with *and* without
+it). DeepSeek-v4-flash **matched Haiku's answer accuracy** (98% vs 91% over 3 reps) at ~8× lower token
+price; a **local** companion is ≈ free, so all-in ≈ the premium-model bill. Fully reproducible + audited
+(human + Fable). Full numbers + methodology: [`benchmark/results/RESULTS.md`](./benchmark/results/RESULTS.md).
+
+<sub>† companion re-priced at DeepSeek-v4-flash rates (~8× cheaper than Haiku); exact for the
+understanding case, derived from the measured cost ratio for the hybrid case.</sub>
 
 **Lineage:** Live Memory began as a feature of **[shofer.dev](https://shofer.dev)** (Arkware's
 parallel multi-agent coding platform), where sessions share an in-sync codebase memory. This is that
 idea as a **standalone Claude Code plugin** — a fresh implementation, self-contained, with no
 dependency on shofer. Part of the **shofer** Claude Code plugin family (with
 [slang-workflows](https://github.com/shofer-dev/claude-code-slang-orchestrator)).
-Design: [`DESIGN.md`](./DESIGN.md) · Testing: [`TESTING.md`](./TESTING.md).
+Design: [`DESIGN.md`](./DESIGN.md) · Testing: [`TESTING.md`](./TESTING.md) · Privacy: [`PRIVACY.md`](./PRIVACY.md).
 
 ## Quickstart
 

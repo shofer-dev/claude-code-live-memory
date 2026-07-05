@@ -1,6 +1,6 @@
 {
   "name": "live-memory",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "A cheap, persistent codebase memory for Claude Code — so your agent stops re-reading the repo. A separate large-context model learns your codebase passively across sessions and answers via the ask_live_memory MCP tool instead of re-loading files; read-only, zero-config on a Claude subscription.",
   "author": { "name": "shofer.dev" },
   "homepage": "https://github.com/shofer-dev/claude-code-live-memory",
