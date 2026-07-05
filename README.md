@@ -6,8 +6,10 @@ codebase across sessions; your agent asks it via one **read-only** tool, `ask_li
 of re-reading files. It **learns passively** from your agent's own reads/edits (teed via hooks — no
 extra reading) and stays current as the repo changes.
 
-> **A/B on a real repo (understanding-heavy work):** the building (premium) model offloaded **~97% of
-> its codebase-reading tokens** and cost **~42% less per turn**, with *lower cost variance*.
+> **A/B on a real repo (understanding-heavy work, per task, run-to-completion):** the building (premium)
+> model offloaded **~93% of its codebase-reading tokens**, cost **~61% less per task** and ran **~22%
+> faster**, with *lower cost variance*. The cheap companion is pluggable — Haiku by default, or
+> **deepseek-v4-flash**, which matched Haiku's accuracy (98% vs 91% over 3 reps) at ~8× lower token price.
 > Edit/execution-heavy work is roughly break-even. Full numbers: [`benchmark/results/RESULTS.md`](./benchmark/results/RESULTS.md).
 
 **Lineage:** Live Memory began as a feature of **[shofer.dev](https://shofer.dev)** (Arkware's
