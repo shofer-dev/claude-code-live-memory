@@ -37,7 +37,7 @@ cd claude-code-live-memory/deploy && ./install-service.sh   # venv + user system
 
 ```
 /plugin marketplace add shofer-dev/claude-code-live-memory
-/plugin install live-memory@shofer
+/plugin install live-memory@shofer-live-memory
 ```
 
 Ask your agent a whole-repo question — it'll call `ask_live_memory` instead of reading files.
@@ -130,7 +130,7 @@ first, then install from it. Inside a Claude Code session:
 
 ```
 /plugin marketplace add https://github.com/shofer-dev/claude-code-live-memory
-/plugin install live-memory@shofer
+/plugin install live-memory@shofer-live-memory
 ```
 
 `shofer` is the marketplace name; `live-memory` is the plugin name. To install
@@ -138,7 +138,7 @@ from a local clone instead, point `add` at the checkout directory:
 
 ```
 /plugin marketplace add /ABSOLUTE/PATH/TO/claude-code-live-memory
-/plugin install live-memory@shofer
+/plugin install live-memory@shofer-live-memory
 ```
 
 After editing plugin files later, run `/plugin marketplace update shofer` then
