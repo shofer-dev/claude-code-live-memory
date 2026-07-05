@@ -4,11 +4,10 @@ version = "0.4.3"
 description = "A cheap, persistent, read-only codebase memory for Claude Code — a large-context model that accumulates repo knowledge across sessions and answers via ask_live_memory instead of re-reading files."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 authors = [{ name = "shofer.dev" }]
 keywords = ["mcp", "claude-code", "memory", "codebase", "context", "llm"]
 classifiers = [
-    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Libraries",
@@ -30,7 +29,7 @@ Repository = "https://github.com/shofer-dev/claude-code-live-memory"
 Issues = "https://github.com/shofer-dev/claude-code-live-memory/issues"
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]   # >=77 for the PEP 639 SPDX `license` string
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
