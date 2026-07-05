@@ -11,6 +11,29 @@ Read-only and path-jailed (it can never edit, create, or run anything); zero-con
 subscription (Haiku, no API key); the memory model is pluggable — point it at a local model or any
 OpenAI-compatible endpoint.
 
+## How it works
+
+```mermaid
+flowchart LR
+  repo[("Your repo")]
+  subgraph sessions["Claude Code sessions — premium model (many, over time)"]
+    agent["Agent"]
+  end
+  agent -->|"reads / edits files"| repo
+  agent -. "PostToolUse / FileChanged hooks<br/>tee file content — passive learning (free)" .-> lm
+  agent ==>|"ask_live_memory(question, cwd)<br/>one read-only MCP tool"| lm
+  lm ==>|"grounded answer — no file re-reading"| agent
+  subgraph server["Live Memory — one MCP server per workspace (singleton)"]
+    lm["Cheap / local large-context model<br/>+ accumulating context window<br/>append-only · neutral compaction to a ledger"]
+    lm --> snap[("Local JSON snapshot<br/>persists across sessions")]
+  end
+```
+
+Your agent **reads or edits files as usual**; hooks quietly tee that content to the server so it **learns
+for free**. When the agent needs to understand something, it **asks** `ask_live_memory` instead of
+re-reading — the server answers from its accumulated, per-workspace memory (or reads the code itself,
+read-only, if it hasn't seen it yet). One server serves every session and **persists across sessions**.
+
 ## Benchmarks
 
 A/B on a real repo, **cost per task, run to completion**. Cost is shown three ways: the **premium

@@ -98,6 +98,51 @@ live-memory/
 
 > **Python note:** Anthropic has **no local tokenizer**. The `context_window` budget math uses a `chars/≈4` heuristic, reconciled against the real `usage` returned per response. (A `count_tokens` round-trip is an alternative for exactness at the cost of latency.)
 
+### Component & data-flow diagram
+
+```mermaid
+flowchart TB
+  subgraph cc["Claude Code session(s) — per workspace"]
+    hooks["Hooks (notify.py)<br/>PostToolUse(Write/Edit) · FileChanged"]
+    ask["ask_live_memory tool"]
+    stats["/live-memory-stats"]
+  end
+
+  subgraph server["Live Memory MCP server — HTTP :7711 (singleton, asyncio)"]
+    direction TB
+    http["server.py — endpoints<br/>/mcp · /notify · /health · /stats · /clear"]
+    queue["question_queue.py<br/>per-workspace FIFO + per-entry timeout"]
+    subgraph ws["workspace.py — state keyed by cwd (git root)"]
+      direction TB
+      window["context_window.py — 'Window B'<br/>file contexts (LRU) · Q/A messages<br/>knowledge ledger · directory tree"]
+      manager["manager.py — agent loop (one question)<br/>cold-start explore guard"]
+      tools["tool_executor.py<br/>read-only, path-jailed: ripgrep / glob / git / read"]
+      compact["compaction (context_window + summarizer.py)<br/>high/low watermark + cooldown:<br/>t0 distill observations to ledger ·<br/>t1 evict file contexts (LRU) · t2 summarize old Q/A"]
+      store["conversation_store.py<br/>versioned JSON snapshot (SHA-256)"]
+    end
+    keepwarm["keep-warm loop<br/>holds provider KV / prompt cache hot"]
+    llm["llm_client.py (provider-pluggable)<br/>Anthropic Messages (cache_control) |<br/>OpenAI-compatible (DeepSeek / local)<br/>oauth.py: subscription OAuth or API key"]
+  end
+
+  hooks -->|"POST /notify — teed file content (observe)"| http
+  ask -->|"question, cwd, timeout"| http
+  stats -->|"GET /stats"| http
+  http --> queue --> manager
+  manager <--> window
+  manager --> tools --> window
+  window --> compact --> window
+  window <-->|"persist / restore"| store
+  manager <-->|"chat + tools (parallel fork → optimistic-version commit)"| llm
+  keepwarm --> llm
+  http -->|"grounded answer + stats"| ask
+```
+
+**Reading it:** file I/O in a session is teed to `/notify` and folded into Window B (`observe`) — passive
+learning. A question flows `/mcp → queue → manager`; the manager answers from Window B, calling the
+read-only path-jailed tools only for what the window hasn't seen, against the server's own cheap model.
+Compaction keeps the window bounded (distill → evict → summarize) under a high/low watermark; the window
+is snapshotted to disk so memory survives restarts; a keep-warm loop keeps the provider cache hot.
+
 ### Two-context-window model (the key insight)
 
 There are **two distinct context windows**, and the Live Memory only needs control over one:
