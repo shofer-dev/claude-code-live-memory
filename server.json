@@ -1,15 +1,21 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.shofer-dev/live-memory",
-  "description": "A cheap, persistent, read-only codebase memory for Claude Code — a separate large-context model accumulates repo knowledge across sessions and answers via ask_live_memory instead of re-reading files. Run as a local HTTP MCP server.",
-  "repository": { "url": "https://github.com/shofer-dev/claude-code-live-memory", "source": "github" },
+  "description": "Persistent, read-only codebase memory for Claude Code; ask it instead of re-reading files.",
+  "repository": {
+    "url": "https://github.com/shofer-dev/claude-code-live-memory",
+    "source": "github"
+  },
   "version": "0.4.3",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "shofer-live-memory",
       "version": "0.4.3",
-      "transport": { "type": "streamable-http", "url": "http://127.0.0.1:7711/mcp" }
+      "transport": {
+        "type": "streamable-http",
+        "url": "http://127.0.0.1:7711/mcp"
+      }
     }
   ]
 }
