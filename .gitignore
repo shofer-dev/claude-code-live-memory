@@ -10,3 +10,8 @@ dist/
 config.json
 oauth_state.json
 *.tmp
+
+# python build artifacts
+server/dist/
+server/build/
+server/*.egg-info/

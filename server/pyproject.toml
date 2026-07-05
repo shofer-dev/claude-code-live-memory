@@ -1,8 +1,18 @@
 [project]
-name = "live-memory-server"
-version = "0.1.0"
-description = "Live Memory MCP server — persistent, read-only, large-context codebase Q&A companion for Claude Code."
+name = "shofer-live-memory"
+version = "0.4.3"
+description = "A cheap, persistent, read-only codebase memory for Claude Code — a large-context model that accumulates repo knowledge across sessions and answers via ask_live_memory instead of re-reading files."
+readme = "README.md"
 requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "shofer.dev" }]
+keywords = ["mcp", "claude-code", "memory", "codebase", "context", "llm"]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries",
+]
 dependencies = [
     "mcp>=1.2.0",
     "anthropic>=0.40.0",
@@ -13,6 +23,11 @@ dependencies = [
 
 [project.scripts]
 live-memory-server = "live_memory.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/shofer-dev/claude-code-live-memory"
+Repository = "https://github.com/shofer-dev/claude-code-live-memory"
+Issues = "https://github.com/shofer-dev/claude-code-live-memory/issues"
 
 [build-system]
 requires = ["setuptools>=68"]
