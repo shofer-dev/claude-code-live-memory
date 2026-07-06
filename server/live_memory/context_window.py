@@ -12,10 +12,34 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import re
 
 from .constants import COLD_LEDGER_MAX_CHARS, DEFAULT_COMPACTION_FLOOR, DEFAULT_COMPACTION_THRESHOLD
 from .models import ChatMessage, ContextUsage, FileContext, LedgerFact, estimate_tokens, now_ms
 from .prompts import STALE_LEDGER_HEADING
+
+
+def _mentions(text: str, token: str) -> bool:
+    """True if `token` appears in `text` not flanked by identifier chars — so the
+    basename `models.py` matches in "(models.py)" but not inside "submodels.python"."""
+    for m in re.finditer(re.escape(token), text):
+        before = text[m.start() - 1] if m.start() > 0 else ""
+        after = text[m.end()] if m.end() < len(text) else ""
+        if not (before.isalnum() or before == "_") and not (after.isalnum() or after == "_"):
+            return True
+    return False
+
+
+def _attribute(text: str, manifest: dict[str, str]) -> dict[str, str]:
+    """Mechanically attribute a ledger fact to the manifest files it names — by full
+    workspace-relative path OR by basename (the model frequently cites files by
+    basename, e.g. `models.py`, not `server/live_memory/models.py`). Over-attribution
+    is acceptable: demotion means re-check, not delete (FUTURE_DIRECTIONS §6)."""
+    src: dict[str, str] = {}
+    for p, h in manifest.items():
+        if p in text or _mentions(text, p.rsplit("/", 1)[-1]):
+            src[p] = h
+    return src
 
 
 class ContextWindow:
@@ -189,8 +213,7 @@ class ContextWindow:
             s = line.strip()
             if not s:
                 continue
-            sources = {p: h for p, h in manifest.items() if p in s}
-            facts.append(LedgerFact(text=s, sources=sources))
+            facts.append(LedgerFact(text=s, sources=_attribute(s, manifest)))
         self.ledger_facts = facts
         self.knowledge_ledger = self._render_ledger()
 

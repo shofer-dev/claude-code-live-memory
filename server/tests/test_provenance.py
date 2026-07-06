@@ -41,6 +41,22 @@ def test_set_ledger_splits_facts_and_attributes_sources():
     assert not any(f.stale for f in w.ledger_facts)
 
 
+def test_attributes_by_basename_not_just_full_path():
+    # the model usually cites files by basename ("models.py"), not the full
+    # workspace-relative path — attribution must catch both (regression: a real
+    # benchmark produced 0 sources when only full paths were matched)
+    w = _win()
+    w.upsert_file_context(FileContext("server/live_memory/models.py", _sha("m"), token_estimate=5))
+    w.set_ledger_from_summary(
+        "`ChatMessage` (models.py): one turn in the conversation\n"           # basename only
+        "server/live_memory/models.py holds the dataclasses\n"                # full path
+        "This mentions submodels.python which is not a real file")            # must NOT match
+    f0, f1, f2 = w.ledger_facts
+    assert f0.sources == {"server/live_memory/models.py": _sha("m")}          # basename hit
+    assert f1.sources == {"server/live_memory/models.py": _sha("m")}          # full-path hit
+    assert f2.sources == {}                                                    # boundary: no false match
+
+
 def test_single_line_summary_renders_verbatim():
     # legacy invariant: a one-line summary must round-trip to the exact ledger text
     w = _win()
