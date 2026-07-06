@@ -248,88 +248,29 @@ per-session premium tokens? A/B cold sessions with vs. without the injected core
 understanding-bound task — the net is (premium exploration saved) − (core-map tokens spent each
 session). Depends entirely on keeping the map small and only pushing it when it pays.
 
-## 6. Ledger freshness (provenance-tagged compaction) — ✅ IMPLEMENTED (core)
+## 6. Ledger freshness (provenance-tagged compaction) — ✅ core shipped; remainder below
 
-> **Shipped.** `LedgerFact` (`models.py`) carries `sources: {path → content_hash}`;
-> `ContextWindow.ledger_facts` is the source of truth and renders the `knowledge_ledger`
-> text readers already consume. A cited file changing **in-session** (`invalidate_file_context` /
-> `mark_file_deleted` → `mark_ledger_stale`) or **cross-session** (`conversation_store` re-hashes
-> each fact's sources against disk on load) demotes citing facts under `STALE_LEDGER_HEADING`.
-> Attribution is per-line/path-mention (each fact cites the manifest paths its text names → small
-> source sets); the summarizer is fed the plain fact text (`ledger_for_summary`, heading stripped).
-> **Remaining future:** background *re-derivation* of demoted facts (today they're flagged, not
-> auto-refreshed); optional model-attribution to narrow source sets; subsumption by the §2 store.
-> The rationale below records the design.
+The **core is implemented** — full design in [`DESIGN.md`](./DESIGN.md) Appendix B (*Freshness*) and
+§Data-Flow-3a. In one line: each ledger fact carries a `sources: {path → content_hash}` sidecar, so a
+cited file changing **in-session** (`mark_ledger_stale`) or **cross-session** (re-hashed on load)
+**demotes** the fact under a warning heading — importing RAG's automatic-freshness property into the
+accumulate-and-reason model without giving up the free-text ledger (see [`COMPARISON.md`](./COMPARISON.md)
+— "The synthesis"). The cheap-side `benchmark/harness/freshness.py` exercises the change paths.
 
-**The gap — asymmetric staleness across the two tiers.** Live Memory keeps two kinds of memory and
-handles their staleness very differently. **Raw file contexts** are a hash-pinned manifest
-(`FileContext.content_hash`, `models.py`) that *self-heals*: the watcher fires `FileChanged` →
-`context_window.invalidate_file_context()` blanks the hash (→ stale → re-read/drop), and on load
-`conversation_store` re-checks each hash against disk and drops mismatches. So even **out-of-band**
-edits (a `git pull`, another editor, a delete) can't leave stale raw evidence. **The knowledge
-ledger** has no such link: compaction (`summarizer.py`) distills dropped Q&A into free-text facts and
-in doing so throws away the *checkable reference* between a fact and the file version it came from —
-it keeps the path as **text** (`SessionManager lives in src/auth/session.ts`), not as a hash it can
-re-validate. After an out-of-band change, that sentence is silently orphaned. Today the only defense
-is **precedence** (the prompt declares fresh file bytes strictly stronger than ledger hints), which is
-soft and only fires when the relevant file happens to be back in-window.
+**What remains future:**
+- **Background re-derivation of demoted facts.** Today a demoted fact is *flagged* (re-verify before
+  trust), not auto-refreshed. A cheap background pass could re-summarize just the stale facts against
+  the changed file's new bytes — self-healing, mirroring what file contexts already do. Demotion is the
+  always-on guardrail; re-derivation is the upgrade.
+- **Sharper attribution.** Today's is mechanical (per-line fact → the manifest paths it names, by full
+  path or basename), which can *over*-tag — a fact demoted because an irrelevant section of a cited file
+  changed (acceptable: demote = re-check, not delete). Optional model-attribution could narrow the
+  source set; a symbol/AST layer (§2) could attribute to the exact definition, not the whole file.
+- **Subsumption by §2.** Once a graph/skeleton store lands, nodes carry source refs natively and this
+  may be redundant — so it's scoped as an interim, additive win for the *prose* ledger, not a permanent
+  subsystem.
 
-**Idea.** Carry provenance *through* compaction: tag each compacted fact with the `{path:
-content_hash}` of the files it drew on — hashes we **already compute** for the manifest — then at
-recall (or on `FileChanged`) compare stored vs current hashes and **demote or re-derive only the facts
-whose sources changed**. Provenance is *advisory metadata riding alongside the prose* — never a schema
-the model must fill, never an index it must trust. This imports RAG's automatic-freshness property
-(every fact traceable to a live source) into Live Memory's accumulate-and-reason model, keeping the
-cumulative understanding pure RAG lacks (see `COMPARISON.md` — "The synthesis").
-
-**Mechanism.**
-- `knowledge_ledger: str` → `list[FactRecord]` (`text`, `sources: [{path, content_hash}]`,
-  `written_at`), with a `render_ledger()` that flattens back to prose so the model's view — and every
-  downstream prompt — is unchanged. Provenance is a **sidecar**; the hashes never enter the
-  token-budgeted prose the model reads.
-- **Attribution: mechanical first.** Tag each fact from a compacted Q&A slice with the union of
-  `{path: content_hash}` for the file contexts that were in-window when that Q&A was answered. It
-  cannot hallucinate a link (worst case it *over*-tags). Optional model-attribution later to narrow
-  the source set.
-- **Validation reuses the existing path.** On `FileChanged` (already wired, `server.py`) or at recall,
-  compare stored source hashes to current; on mismatch mark `stale=True` and render that fact under a
-  `⚠ possibly out of date — re-verify against current files` heading (leaning on the precedence rule
-  that already exists). Optional: a cheap background pass that re-summarizes just the stale facts
-  against the changed file's new content — self-healing, mirroring what file contexts already do.
-
-**Why it respects the §0 constraints.** The ledger the model reads/writes stays **free-text prose**
-(§0: the model reasons best over natural language) — no knowledge graph, no per-sentence citation UI.
-It reuses hashing already done; the check is **O(changed files)**, not O(ledger). The model never
-*trusts* the tags — they only gate demotion/re-derivation — which preserves the core bet ("reason over
-current context, not an index it trusts"). It composes with §1 (passive sync already produces the
-FileChanged events and fresh hashes) and with §2 (when the store becomes a graph/skeleton, provenance
-generalizes to node/edge → source-hash, same mechanism).
-
-**Granularity tension (the one knob).** Too coarse (hash the whole transcript window per fact) →
-over-demotion: a fact flagged because *some unrelated* file in that window changed. Too fine
-(per-sentence / per-symbol source-linking) → brittle and expensive, drifting back toward the symbolic
-index §2 explicitly warns against. **Sweet spot: per-fact with a small source set (1–3 files).**
-Whole-file hashing still means an edit to an *irrelevant section* of a cited file demotes the fact —
-acceptable, because **demote = re-check, not delete**.
-
-**Hard parts / risks.**
-1. **Attribution precision** — mechanical tagging over-tags (churn); model attribution can mislink.
-   Start mechanical; only add model-narrowing if false demotions become annoying.
-2. **Re-derivation cost/scheduling** — on-demand (blocks the answer) vs background (eventual). Prefer
-   background, with demotion (cheap) as the always-on guardrail.
-3. **Interaction with the §4 ledger self-cap (~2048 tokens).** Keep provenance strictly out of the
-   rendered prose so it never competes with the token budget — hashes live in the snapshot sidecar
-   only.
-4. **Possible subsumption by §2.** Once a graph/skeleton store lands, nodes carry source refs
-   natively and this may be redundant. So scope it as an **interim, additive** win for the *prose
-   ledger* — cheap now, not a permanent subsystem.
-
-**Sequencing.** Cheap and additive; **can ship before the §2 store**. Steps 1–3 (FactRecord +
-mechanical tagging + FileChanged demotion + the prose heading) touch only existing code
-(`summarizer.py`, `context_window.py`, `models.py`, `server.py`); background re-derive is a later,
-optional layer.
-
-**Measurement hinge.** During an understanding-bound run, mutate files the ledger holds facts about
-**out-of-band** (edit/delete outside the agent) and measure the **stale-answer rate** with vs. without
-demotion — alongside the **false-demotion rate** (facts demoted whose relevant content didn't actually
-change). Net win = (wrong answers avoided) − (extra re-derivation cost + churn from false demotions).
+**Measurement hinge (for the above).** Mutate files the ledger holds facts about **out-of-band** during
+an understanding-bound run and track the **stale-answer rate** (with vs. without demotion) alongside the
+**false-demotion rate** (facts demoted whose relevant content didn't actually change). Net win =
+(wrong answers avoided) − (extra re-derivation cost + churn from false demotions).

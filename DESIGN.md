@@ -253,6 +253,7 @@ Claude calls ask_live_memory(question, cwd, timeout)   (mandatory soft timeout; 
 **a. External edits / deletes** — `FileChanged` hook (v2.1+, debounced) → HTTP POST to server → **filter: if `path` is in the loaded-files set** (else drop). `FileChanged` carries the change type (`change`/`add`/`unlink`), forwarded by `notify.py`, and the server branches on it:
   - `change`/`add` → `invalidate_file_context` (marks **stale**, retains slot; lazy re-read on next reference) → manifest: *"CHANGED since you read it."*
   - `unlink` → `mark_file_deleted` (a **distinct** state — there's nothing to re-read here) → manifest: *"DELETED or moved/renamed; it no longer exists at this path"*, telling the agent to relocate it (Glob/Grep/find_paths) or report it gone. A move/rename surfaces as `unlink`(old)+`add`(new); the old path is reported gone (the hook gives no old→new correlation). On reload, missing files are dropped by SHA-256 validation regardless.
+  - Either path also **demotes any knowledge-ledger fact distilled from that file** (`mark_ledger_stale`) — so the durable summary can't keep asserting a fact whose source has moved on, not just the raw manifest entry (see Appendix B, *Freshness*).
   A server-side OS watcher is the fallback if `FileChanged` is unavailable.
 
 **b. Task/tool edits** — `PostToolUse` hook (matcher `Write|Edit`) → HTTP POST → **filter: if `path` is in the loaded-files set**, add to `recentlyModifiedFiles` (else drop — a file Live Memory never read has no prior knowledge to be stale). **No eviction** (append-only preserved); the set is drained into the next question's trailing-turn hint. *(Superseded by passive ingestion (c) when enabled: teeing the new bytes is strictly stronger than a stale hint.)*
@@ -419,11 +420,17 @@ the ±15% heuristic into ±few-% with zero added latency and no provider asymmet
 
 ## Appendix B — The knowledge ledger (format & lifecycle)
 
-The **knowledge ledger** is Live Memory's durable, distilled memory of a repo: a single free-text
-block per workspace (`ContextWindow.knowledge_ledger: str`), persisted in the snapshot and rendered
-near the top of the **volatile** system block on every question, under `## Accumulated knowledge
-(durable facts distilled from earlier questions)` (empty until the first compaction —
-`prompts.empty_ledger_text()`).
+The **knowledge ledger** is Live Memory's durable, distilled memory of a repo, persisted in the
+snapshot and rendered near the top of the **volatile** system block on every question, under
+`## Accumulated knowledge (durable facts distilled from earlier questions)` (empty until the first
+compaction — `prompts.empty_ledger_text()`).
+
+Its source of truth is a list of **provenance-tagged facts** (`ContextWindow.ledger_facts:
+list[LedgerFact]`); the free-text `knowledge_ledger: str` every reader consumes is *rendered* from
+them (`_render_ledger()`). Each `LedgerFact` carries `sources: {path → content_hash}` — the files it
+was distilled from, at the version it was distilled — so a cited file changing can **demote** the
+fact rather than let stale prose be trusted (see *Freshness* below). When `ledger_facts` is empty
+(legacy snapshot / direct assignment) the string stands alone, so nothing regresses.
 
 **Format — a convention, not a schema.** There is no rigid grammar; the shape is *guided by the
 summary prompt* (`prompts.NEUTRAL_SUMMARY_SYSTEM_PROMPT`), deliberately kept as **dense natural
@@ -431,9 +438,11 @@ language** rather than JSON/graph so the model still reasons well over it (the d
 too terse/symbolic and the LLM reasons *worse*; see FUTURE_DIRECTIONS §2). The convention the prompt
 enforces:
 
-- **Dense, structured facts** — *locations* (where things live), *relationships* (what calls /
-  consumes / depends on what), and *conventions*. Canonical example (from the prompt):
+- **Dense, structured facts, one per line** — *locations* (where things live), *relationships* (what
+  calls / consumes / depends on what), and *conventions*. Canonical example (from the prompt):
   `Auth lives in src/auth/*; SessionManager (src/auth/session.ts) issues tokens; consumed by api/middleware.ts`.
+  One fact per line (with its file path(s) named inline) keeps each fact independently checkable
+  against the file it came from — the unit that provenance attaches to.
 - **Query-agnostic** — general, reusable codebase facts, NOT "the answer to the last question"; the
   summarizer runs with recent/current queries *out of scope* so it cannot bias toward them.
 - **Merged & de-duplicated** — each compaction *extends* the existing ledger; facts already present
@@ -444,18 +453,34 @@ enforces:
 1. Starts empty.
 2. **Grown by compaction** (`manager._maybe_compact`): tier-0 folds evicted *observed file content*
    into it, and tier-2 folds the oldest *Q&A pairs* into it — both via
-   `summarizer.summarize(existing_ledger, dropped)`, which calls the neutral summarizer and returns
-   the **updated ledger text only** (a merge of existing + newly-dropped; input capped at
-   `MAX_TRANSCRIPT_CHARS` per call). Distillation into the ledger is rate-limited by the per-workspace
-   cooldown (see §Compaction).
-3. **Rendered** into the volatile system block each question — kept *out* of the cached stable prefix
+   `summarizer.summarize(ledger_for_summary(), dropped)`, which calls the neutral summarizer and
+   returns the **updated ledger text only** (a merge of existing + newly-dropped; input capped at
+   `MAX_TRANSCRIPT_CHARS` per call). The result is adopted via `set_ledger_from_summary()`, which
+   splits it into per-line facts and **mechanically attributes** each to the manifest files it names —
+   by full workspace-relative path *or* basename (the model often cites files by basename), recording
+   their current hash. Distillation into the ledger is rate-limited by the per-workspace cooldown
+   (see §Compaction).
+3. **Freshness — demotion on change (provenance-tagged compaction).** When a cited file changes, the
+   facts distilled from it are **demoted**, not silently trusted: `invalidate_file_context` /
+   `mark_file_deleted` (the §Data-Flow-3a `FileChanged` path) call `mark_ledger_stale(path)`
+   *in-session*, and on load `conversation_store` re-hashes each fact's `sources` against disk and
+   flags mismatches *cross-session* — mirroring the SHA-256 self-heal the file-context manifest already
+   does, but for the compacted ledger. Demoted facts render under a warning heading
+   (`STALE_LEDGER_HEADING`, *"⚠ Possibly out of date…"*) so the model re-verifies before relying on
+   them; attribution and flags reset at the next compaction. Attribution is a *sidecar* the model
+   never sees — the hashes stay out of the token-budgeted prose. Facts naming no known file get empty
+   `sources` and are never auto-demoted (they fall back to precedence, as before).
+4. **Rendered** into the volatile system block each question — kept *out* of the cached stable prefix
    so it can grow without busting the directory-tree cache — and consulted "context-first" before any
    tool call.
-4. **Persisted** verbatim in the per-workspace snapshot; reloaded on restart.
+5. **Persisted** in the per-workspace snapshot (facts + their `sources`; backward-compatible with
+   legacy string-only snapshots); reloaded and re-validated against disk on restart.
 
 **Why free text, not a parseable schema.** It is read by an LLM, not a parser; the goal is *the right
 facts at a density the model reasons over cheaply*, plus a stable, extend-only prefix that stays
-cache-friendly. A denser, graph/skeleton representation is a parked future direction
+cache-friendly. Provenance rides *alongside* the prose (a per-fact `sources` sidecar the model never
+sees), so it adds change-detection without turning the ledger into a schema the model must trust — the
+free-text contract is unchanged. A denser, graph/skeleton representation is a parked future direction
 (FUTURE_DIRECTIONS §2), not the current contract.
 
 ---
