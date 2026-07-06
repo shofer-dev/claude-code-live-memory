@@ -1,0 +1,106 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Live Memory — /live-memory-stats poster</title>
+<style>
+  :root{
+    --ground:#07090d;
+    --term:#0c0f15;
+    --bar:#151922;
+    --line:#232a38;
+    --ink:#e9ecf3;
+    --muted:#8b93a7;
+    --faint:#5a6273;
+    --amber:#e9a23b;
+    --amber-dim:#7a5a24;
+    --green:#57c98a;
+    --cyan:#5fb6d6;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:radial-gradient(900px 500px at 50% -10%, rgba(233,162,59,.06), transparent 60%),var(--ground);
+    color:var(--ink);
+    font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    -webkit-font-smoothing:antialiased;
+    display:flex;justify-content:center;padding:36px 20px;
+  }
+  .term{
+    width:100%;max-width:860px;
+    background:var(--term);
+    border:1px solid var(--line);
+    border-radius:12px;
+    overflow:hidden;
+    box-shadow:0 26px 80px -30px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.03);
+  }
+  .titlebar{display:flex;align-items:center;gap:8px;padding:11px 14px;background:var(--bar);border-bottom:1px solid var(--line)}
+  .dot{width:11px;height:11px;border-radius:50%}
+  .dot.r{background:#f0655b}.dot.y{background:#f0bd4a}.dot.g{background:#5fca6a}
+  .titlebar .name{margin-left:8px;color:var(--faint);font-size:12px;letter-spacing:.02em}
+  .titlebar .name b{color:var(--muted);font-weight:600}
+  .body{padding:20px 24px 22px;font-size:13.5px;line-height:1.6}
+  .banner{color:var(--amber);font-size:9.5px;line-height:1.08;margin:0 0 12px;white-space:pre;overflow-x:auto;text-shadow:0 0 16px rgba(233,162,59,.22)}
+  .muted{color:var(--muted)}.faint{color:var(--faint)}
+  .prompt{color:var(--green)}
+  .cmd{color:var(--ink)}
+  .tag{color:var(--faint);margin:0 0 14px}
+  .status-h{color:var(--ink);font-weight:700;margin:2px 0 10px;letter-spacing:.02em}
+  .stats{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-variant-numeric:tabular-nums}
+  .k{color:var(--faint)}
+  .v{color:var(--ink)}
+  .v .amber{color:var(--amber)}
+  .v .green{color:var(--green);font-weight:600}
+  .v .cyan{color:var(--cyan)}
+  .v .faint{color:var(--faint)}
+  .v.hot{color:var(--green);font-weight:700}
+  .sep{grid-column:1 / -1;height:1px;background:var(--line);margin:8px 0}
+  .cursor{display:inline-block;width:8px;height:15px;background:var(--amber);vertical-align:-2px;margin-left:3px;box-shadow:0 0 10px rgba(233,162,59,.7)}
+  .caption{max-width:860px;margin:16px auto 0;color:var(--faint);font-size:12px;text-align:center;line-height:1.55}
+  .caption b{color:var(--muted)}
+  .caption code{color:var(--amber)}
+</style>
+
+<div>
+<div class="term">
+  <div class="titlebar">
+    <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+    <span class="name"><b>claude</b> — arkware.ai — live memory attached</span>
+  </div>
+  <div class="body">
+    <div><span class="prompt">›</span> <span class="cmd">/live-memory-stats</span></div>
+
+    <pre class="banner">██╗     ██╗██╗   ██╗███████╗
+██║     ██║██║   ██║██╔════╝
+██║     ██║██║   ██║█████╗
+██║     ██║╚██╗ ██╔╝██╔══╝
+███████╗██║ ╚████╔╝ ███████╗
+╚══════╝╚═╝  ╚═══╝  ╚══════╝
+███╗   ███╗███████╗███╗   ███╗ ██████╗ ██████╗ ██╗   ██╗
+████╗ ████║██╔════╝████╗ ████║██╔═══██╗██╔══██╗╚██╗ ██╔╝
+██╔████╔██║█████╗  ██╔████╔██║██║   ██║██████╔╝ ╚████╔╝
+██║╚██╔╝██║██╔══╝  ██║╚██╔╝██║██║   ██║██╔══██╗  ╚██╔╝
+██║ ╚═╝ ██║███████╗██║ ╚═╝ ██║╚██████╔╝██║  ██║   ██║
+╚═╝     ╚═╝╚══════╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝</pre>
+    <div class="tag">        always-up-to-date codebase memory · ask, don't re-read</div>
+
+    <div class="status-h">Live Memory — status</div>
+    <div class="stats">
+      <div class="k">workspace</div>      <div class="v"><span class="cyan">~/Projects/arkware.ai</span></div>
+      <div class="k">model</div>          <div class="v"><span class="amber">deepseek-v4-flash</span> <span class="faint">via</span> llm-router</div>
+      <div class="k">concurrency</div>    <div class="v">parallel</div>
+      <div class="sep"></div>
+      <div class="k">context window</div> <div class="v"><span class="amber">148,912 / 200,000</span> tokens <span class="faint">(74%)</span></div>
+      <div class="k">Q&amp;A retained</div>  <div class="v">38 messages</div>
+      <div class="k">file contexts</div>  <div class="v"><span class="green">261</span> learned <span class="faint">(3 stale)</span></div>
+      <div class="k">last compaction</div><div class="v">6m12s ago <span class="faint">(summaries: 4)</span></div>
+      <div class="sep"></div>
+      <div class="k">questions</div>      <div class="v"><span class="green">173</span> answered <span class="faint">(queue: 0)</span></div>
+      <div class="k">cache refreshed</div><div class="v">9s ago <span class="faint">(612 keep-warm pings)</span></div>
+      <div class="k">cost (cumulative)</div><div class="v hot">$0.0431</div>
+      <div class="k">uptime</div>         <div class="v">4d 07h 22m</div>
+    </div>
+
+    <div style="margin-top:14px"><span class="prompt">›</span> <span class="cursor"></span></div>
+  </div>
+</div>
+<p class="caption"><b>173 broad questions answered for ~4¢</b> — a large-context companion carrying the repo so the premium model doesn't re-read it. <b>Illustrative</b> <code>/live-memory-stats</code> output; run it for your own live numbers.</p>
+</div>

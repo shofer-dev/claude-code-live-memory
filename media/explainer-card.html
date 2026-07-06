@@ -1,0 +1,176 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Live Memory — how it works + benchmarks</title>
+<style>
+  :root{
+    --ground:#0a0c11;      /* page, cool near-black */
+    --card:#0f1218;        /* card ground */
+    --panel:#161a23;       /* lifted panels */
+    --panel-2:#1c212c;
+    --line:#262c3a;        /* hairlines */
+    --ink:#e9ecf3;         /* primary text, cool off-white */
+    --muted:#8b93a7;       /* secondary */
+    --faint:#5a6273;       /* tertiary / ghosts */
+    --amber:#e9a23b;       /* single bold accent — amber CRT / "memory" */
+    --amber-dim:#7a5a24;
+    --good:#57c98a;        /* semantic delta only */
+    --track:#2a3040;       /* baseline bar */
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--ground);
+    color:var(--ink);
+    font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    -webkit-font-smoothing:antialiased;
+    display:flex;justify-content:center;
+    padding:34px 20px;
+    line-height:1.5;
+  }
+  .card{
+    width:100%;max-width:1120px;
+    background:
+      radial-gradient(1200px 340px at 78% -8%, rgba(233,162,59,.09), transparent 60%),
+      var(--card);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:34px 40px 30px;
+    box-shadow:0 24px 70px -30px rgba(0,0,0,.85), inset 0 1px 0 rgba(255,255,255,.03);
+  }
+  /* ---- header ---- */
+  .banner{
+    color:var(--amber);
+    font-size:11px;line-height:1.08;
+    margin:0;white-space:pre;
+    overflow-x:auto;
+    text-shadow:0 0 18px rgba(233,162,59,.25);
+  }
+  .tagline{
+    color:var(--muted);
+    margin:12px 0 0;font-size:14px;letter-spacing:.01em;
+  }
+  .tagline b{color:var(--ink);font-weight:600}
+  .rule{height:1px;background:linear-gradient(90deg,var(--line),transparent);margin:26px 0 22px}
+  .eyebrow{
+    text-transform:uppercase;letter-spacing:.22em;
+    font-size:11px;color:var(--faint);margin:0 0 16px;
+    display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+  }
+  .eyebrow .scope{color:var(--amber);letter-spacing:.14em;}
+  /* ---- how it works ---- */
+  .flow{display:flex;align-items:stretch;gap:0;overflow-x:auto}
+  .node{
+    flex:1 1 0;min-width:190px;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:16px 16px 15px;
+  }
+  .node.lm{border-color:var(--amber-dim);background:linear-gradient(180deg,var(--panel-2),var(--panel));}
+  .node .k{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
+  .node .t{font-size:15px;color:var(--ink);margin:0 0 6px;font-weight:600}
+  .node .d{font-size:12.5px;color:var(--muted);margin:0}
+  .node.lm .t{color:var(--amber)}
+  .arrow{
+    flex:0 0 118px;display:flex;flex-direction:column;justify-content:center;
+    align-items:center;gap:5px;padding:0 4px;text-align:center;
+  }
+  .arrow .lab{font-size:10.5px;color:var(--muted);line-height:1.3}
+  .arrow .lab.free{color:var(--good)}
+  .arrow .g{font-size:16px;color:var(--amber);letter-spacing:-2px}
+  .arrow .g.thin{color:var(--faint);font-size:14px}
+  .arrow code{color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:10.5px}
+  /* ---- benchmark ---- */
+  .bars{display:grid;gap:14px}
+  .bar{display:grid;grid-template-columns:210px 1fr 92px;align-items:center;gap:16px}
+  .bar .name{font-size:13px;color:var(--ink)}
+  .bar .name .sub{display:block;color:var(--faint);font-size:11px;margin-top:2px}
+  .track{position:relative;height:26px;background:var(--track);border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+  .fill{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,#c9852b,var(--amber));border-radius:5px 0 0 5px;display:flex;align-items:center;padding-left:10px}
+  .fill span{font-size:11px;color:#1b140a;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .delta{text-align:right;font-size:19px;font-weight:700;color:var(--good);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .delta small{display:block;font-size:10px;color:var(--faint);font-weight:500;letter-spacing:.04em;margin-top:1px}
+  .axis{display:grid;grid-template-columns:210px 1fr 92px;gap:16px;margin-top:2px}
+  .axis .ticks{display:flex;justify-content:space-between;font-size:10px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .note{font-size:11.5px;color:var(--muted);margin:20px 0 0;line-height:1.6}
+  .note b{color:var(--ink);font-weight:600}
+  /* ---- footer ---- */
+  .foot{display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;margin-top:26px;padding-top:20px;border-top:1px solid var(--line)}
+  .install{font-size:13px;color:var(--muted)}
+  .install code{color:var(--amber);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 9px;font-size:12.5px}
+  .badges{font-size:11.5px;color:var(--faint);display:flex;gap:14px;flex-wrap:wrap}
+  .badges span::before{content:"● ";color:var(--amber-dim)}
+</style>
+
+<div class="card">
+  <pre class="banner">██╗     ██╗██╗   ██╗███████╗    ███╗   ███╗███████╗███╗   ███╗ ██████╗ ██████╗ ██╗   ██╗
+██║     ██║██║   ██║██╔════╝    ████╗ ████║██╔════╝████╗ ████║██╔═══██╗██╔══██╗╚██╗ ██╔╝
+██║     ██║██║   ██║█████╗      ██╔████╔██║█████╗  ██╔████╔██║██║   ██║██████╔╝ ╚████╔╝
+██║     ██║╚██╗ ██╔╝██╔══╝      ██║╚██╔╝██║██╔══╝  ██║╚██╔╝██║██║   ██║██╔══██╗  ╚██╔╝
+███████╗██║ ╚████╔╝ ███████╗    ██║ ╚═╝ ██║███████╗██║ ╚═╝ ██║╚██████╔╝██║  ██║   ██║
+╚══════╝╚═╝  ╚═══╝  ╚══════╝    ╚═╝     ╚═╝╚══════╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝</pre>
+  <p class="tagline">An <b>always-up-to-date memory of your codebase</b> for Claude Code. Your agent <b>asks</b> instead of re-reading files — so the premium model spends its tokens on work, not on re-discovering the repo.</p>
+
+  <div class="rule"></div>
+
+  <p class="eyebrow">How it works</p>
+  <div class="flow">
+    <div class="node">
+      <p class="k">Source</p>
+      <p class="t">Your repo</p>
+      <p class="d">The agent reads &amp; edits files here, session after session.</p>
+    </div>
+    <div class="arrow">
+      <div class="lab free">tee reads/edits<br>passive learning</div>
+      <div class="g">⇢</div>
+      <div class="lab free">(free — no extra reads)</div>
+    </div>
+    <div class="node">
+      <p class="k">Premium model · many sessions</p>
+      <p class="t">Claude Code agent</p>
+      <p class="d">Does the work: plans, edits, runs. Bootstrapped fast instead of re-reading.</p>
+    </div>
+    <div class="arrow">
+      <code>ask_live_memory</code>
+      <div class="g">⇄</div>
+      <div class="lab">grounded answer<br>read-only · no re-reading</div>
+    </div>
+    <div class="node lm">
+      <p class="k">One server per workspace</p>
+      <p class="t">Live Memory</p>
+      <p class="d">Cheap or local large-context model. Accumulates repo knowledge, persists across sessions.</p>
+    </div>
+  </div>
+
+  <div class="rule"></div>
+
+  <p class="eyebrow">Benchmark <span class="scope">understanding-bound tasks · K=12 · run to completion</span></p>
+  <div class="bars">
+    <div class="bar">
+      <div class="name">Premium coding-model bill<span class="sub">the model you pay for by the token</span></div>
+      <div class="track"><div class="fill" style="width:39%"><span>39% of baseline</span></div></div>
+      <div class="delta">−61%<small>WELCH t=7.0</small></div>
+    </div>
+    <div class="bar">
+      <div class="name">Total spend · DeepSeek companion<span class="sub">incl. the cheap model's cost</span></div>
+      <div class="track"><div class="fill" style="width:43%"><span>43%</span></div></div>
+      <div class="delta">−57%<small>ALL-IN</small></div>
+    </div>
+    <div class="bar">
+      <div class="name">Total spend · Haiku companion<span class="sub">incl. the cheap model's cost</span></div>
+      <div class="track"><div class="fill" style="width:75%"><span>75%</span></div></div>
+      <div class="delta">−25%<small>ALL-IN</small></div>
+    </div>
+    <div class="bar">
+      <div class="name">End-to-end wall time<span class="sub">task start → completion</span></div>
+      <div class="track"><div class="fill" style="width:78%"><span>78%</span></div></div>
+      <div class="delta">−22%<small>FASTER</small></div>
+    </div>
+  </div>
+  <div class="axis"><div></div><div class="ticks"><span>0</span><span>25%</span><span>50%</span><span>75%</span><span>baseline = 100%</span></div><div></div></div>
+
+  <p class="note"><b>Per-task, normalized</b> across 12 understanding-bound tasks, each run to completion — no imputation; costs are Claude Code's reported <code style="color:var(--amber)">total_cost_usd</code>. <b>“Premium bill”</b> counts only the coding model (what you’re billed by the token); <b>“total spend”</b> adds the companion. The cheap companion can be very cheap (DeepSeek-v4-flash, ~8× under Haiku) or local (≈ free).</p>
+
+  <div class="foot">
+    <div class="install">install &nbsp;<code>/plugin install live-memory@shofer-live-memory</code></div>
+    <div class="badges"><span>read-only</span><span>path-jailed</span><span>free on a Claude subscription</span><span>local-model ready</span></div>
+  </div>
+</div>
