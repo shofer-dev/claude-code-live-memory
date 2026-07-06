@@ -76,7 +76,7 @@ parallel multi-agent coding platform), where sessions share an in-sync codebase 
 idea as a **standalone Claude Code plugin** — a fresh implementation, self-contained, with no
 dependency on shofer. Part of the **shofer** Claude Code plugin family (with
 [slang-workflows](https://github.com/shofer-dev/claude-code-slang-orchestrator)).
-Design: [`DESIGN.md`](./DESIGN.md) · Testing: [`TESTING.md`](./TESTING.md) · Privacy: [`PRIVACY.md`](./PRIVACY.md).
+Design: [`DESIGN.md`](./DESIGN.md) · How it compares to Copilot/Cursor: [`COMPARISON.md`](./COMPARISON.md) · Testing: [`TESTING.md`](./TESTING.md) · Privacy: [`PRIVACY.md`](./PRIVACY.md).
 
 ## Quickstart
 
