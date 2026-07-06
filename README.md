@@ -27,6 +27,8 @@ Read-only and path-jailed (it can never edit, create, or run anything); zero-con
 subscription (Haiku, no API key); the memory model is pluggable — point it at a local model or any
 OpenAI-compatible endpoint.
 
+![Live Memory answering a question from accumulated memory — zero files re-read by the agent](media/live-memory.gif)
+
 ## How it works
 
 ```mermaid

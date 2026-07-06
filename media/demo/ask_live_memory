@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+AM=$'\033[38;5;215m'; C=$'\033[38;5;80m'; A=$'\033[38;5;252m'; D=$'\033[38;5;244m'; G=$'\033[38;5;72m'; R=$'\033[0m'
+printf '\n%s⏺ ask_live_memory%s  %s↳ answering from accumulated memory…%s\n\n' "$D" "$R" "$D" "$R"
+sleep 0.9
+printf '%sOpenAIClient._with_extra()%s%s injects %sconversation_id%s%s from the\n' "$AM" "$R" "$A" "$C" "$R" "$A"
+sleep 0.22
+printf '%s%scfg.openai_extra_body%s%s dict (from the %sLIVE_MEMORY_OPENAI_EXTRA_BODY%s%s env var),\n' "$A" "$C" "$R" "$A" "$C" "$R" "$A"
+sleep 0.22
+printf '%sreplacing any %s"__auto__"%s%s placeholder with a fresh per-request UUID.%s\n' "$A" "$C" "$R" "$A" "$R"
+sleep 0.5
+printf '\n%s────────────────────────────────────────────────────────%s\n' "$D" "$R"
+printf '%s[live-memory]  model=%sclaude-haiku-4-5%s%s  ·  files re-read by the agent: %s0%s\n' "$D" "$AM" "$R" "$D" "$G" "$R"
