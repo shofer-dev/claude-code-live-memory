@@ -13,6 +13,15 @@ import urllib.parse
 import urllib.request
 
 STATS_URL = os.environ.get("LIVE_MEMORY_STATS_URL", "http://127.0.0.1:7711/stats")
+_BANNER_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "banner.txt")
+
+
+def _print_banner() -> None:
+    try:
+        with open(_BANNER_PATH, encoding="utf-8") as f:
+            sys.stdout.write("\n" + f.read().rstrip("\n") + "\n\n")
+    except OSError:
+        pass  # banner is cosmetic; never fail stats over it
 
 
 def _fmt_usd(v) -> str:
@@ -35,6 +44,7 @@ def _ago(epoch_s) -> str:
 
 def main() -> int:
     cwd = sys.argv[1] if len(sys.argv) > 1 else os.getcwd()
+    _print_banner()
     url = STATS_URL + "?" + urllib.parse.urlencode({"cwd": cwd})
     try:
         with urllib.request.urlopen(url, timeout=3.0) as resp:
