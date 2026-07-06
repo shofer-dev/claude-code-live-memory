@@ -31,6 +31,23 @@ def _fmt_usd(v) -> str:
         return str(v)
 
 
+def _dur(secs) -> str:
+    try:
+        s = int(secs)
+    except Exception:
+        return f"{secs}s"
+    d, s = divmod(s, 86400)
+    h, s = divmod(s, 3600)
+    m, _ = divmod(s, 60)
+    parts = []
+    if d:
+        parts.append(f"{d}d")
+    if d or h:
+        parts.append(f"{h:02d}h")
+    parts.append(f"{m:02d}m")
+    return " ".join(parts)
+
+
 def _ago(epoch_s) -> str:
     if not epoch_s:
         return "never"
@@ -71,7 +88,7 @@ def main() -> int:
         print(f"  cost (cumulative): {_fmt_usd(s.get('costUsd', 0))}")
     else:
         print(f"  cost            : {s.get('costNote', 'subscription — rate-limited, not $-metered')}")
-    print(f"  uptime          : {s.get('uptimeSeconds', '?')}s")
+    print(f"  uptime          : {_dur(s.get('uptimeSeconds', '?'))}")
     return 0
 
 
