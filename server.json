@@ -6,12 +6,12 @@
     "url": "https://github.com/shofer-dev/claude-code-live-memory",
     "source": "github"
   },
-  "version": "0.4.3",
+  "version": "0.5.0",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "shofer-live-memory",
-      "version": "0.4.3",
+      "version": "0.5.0",
       "transport": {
         "type": "streamable-http",
         "url": "http://127.0.0.1:7711/mcp"
