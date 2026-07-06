@@ -118,6 +118,34 @@ class FileContext:
 
 
 @dataclass
+class LedgerFact:
+    """One durable fact in the knowledge ledger, tagged with its provenance
+    (FUTURE_DIRECTIONS §6). `sources` maps each cited file path → the content hash
+    it had when the fact was recorded, so an out-of-band change to a cited file can
+    be detected and the fact **demoted** (`stale=True`) rather than silently trusted.
+    Attribution is mechanical (a fact cites the manifest paths it mentions); an
+    empty `sources` means nothing to validate against, so the fact is never
+    auto-demoted (it falls back to precedence, as before)."""
+    text: str
+    sources: dict[str, str] = field(default_factory=dict)  # path → content_hash at write time
+    written_at: int = field(default_factory=now_ms)
+    stale: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"text": self.text, "sources": dict(self.sources),
+                "written_at": self.written_at, "stale": self.stale}
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "LedgerFact":
+        return cls(
+            text=d.get("text", ""),
+            sources=dict(d.get("sources", {})),
+            written_at=d.get("written_at", now_ms()),
+            stale=bool(d.get("stale", False)),
+        )
+
+
+@dataclass
 class CostSnapshot:
     usd: float = 0.0
     input_tokens: int = 0

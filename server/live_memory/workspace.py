@@ -106,7 +106,8 @@ class WorkspaceState:
 
     async def load(self) -> None:
         data = await asyncio.to_thread(self.store.load)
-        self.window.restore(data["messages"], data["file_contexts"], data["knowledge_ledger"])
+        self.window.restore(data["messages"], data["file_contexts"],
+                            data["knowledge_ledger"], data.get("ledger_facts"))
         self.last_compaction = data["last_compaction"]
         self.summaries_written = data["summaries_written"]
         self.questions_answered = data["questions_answered"]
@@ -120,6 +121,7 @@ class WorkspaceState:
                 "messages": self.window.messages,
                 "file_contexts": self.window.file_contexts,
                 "knowledge_ledger": self.window.knowledge_ledger,
+                "ledger_facts": self.window.ledger_facts,
                 "last_compaction": self.last_compaction,
                 "summaries_written": self.summaries_written,
                 "questions_answered": self.questions_answered,

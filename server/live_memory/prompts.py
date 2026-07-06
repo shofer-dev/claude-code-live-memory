@@ -40,6 +40,14 @@ def empty_ledger_text() -> str:
     return "(none yet — this grows as questions are answered and history is compacted.)"
 
 
+# Heading under which DEMOTED facts are rendered in the ledger (FUTURE_DIRECTIONS §6):
+# a file a fact was distilled from has changed since, so the fact may no longer hold.
+STALE_LEDGER_HEADING = (
+    "### ⚠ Possibly out of date — a file these facts were distilled from has changed since; "
+    "re-verify against the current file(s) before relying on them:"
+)
+
+
 # Summarization is NEUTRAL and query-agnostic: it distills durable codebase facts,
 # NOT answers to recent questions. Run with the current/recent question OUT of
 # scope so it cannot bias toward them. Output extends the existing ledger.
@@ -51,6 +59,7 @@ You are given (1) the EXISTING knowledge ledger and (2) a TRANSCRIPT of older qu
 STRICT RULES:
 - Be QUERY-AGNOSTIC. Capture general, reusable facts about the codebase — structure, where things live, what components do, how they relate, conventions, key file paths — NOT "the answer to the last question." The assistant is asked about wildly different topics, so do not bias the summary toward the recent transcript's questions.
 - Prefer a dense, structured "knowledge ledger" of facts: e.g. "Auth lives in src/auth/*; SessionManager (src/auth/session.ts) issues tokens; consumed by api/middleware.ts". Locations + relationships + conventions.
+- Put each distinct fact on its OWN line, and name the file path(s) it concerns inline (e.g. `src/auth/session.ts`). One fact per line keeps each fact independently checkable against the file it came from.
 - MERGE with the existing ledger; do not repeat facts already present. Drop conversational filler, tool-call mechanics, and one-off specifics that won't help future unrelated questions.
 - Never invent facts. Only record what the transcript/ledger support.
 - Output ONLY the updated ledger text (no preamble, no commentary)."""

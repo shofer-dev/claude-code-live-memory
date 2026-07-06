@@ -14,7 +14,8 @@ import copy
 import hashlib
 
 from .constants import COLD_LEDGER_MAX_CHARS, DEFAULT_COMPACTION_FLOOR, DEFAULT_COMPACTION_THRESHOLD
-from .models import ChatMessage, ContextUsage, FileContext, estimate_tokens, now_ms
+from .models import ChatMessage, ContextUsage, FileContext, LedgerFact, estimate_tokens, now_ms
+from .prompts import STALE_LEDGER_HEADING
 
 
 class ContextWindow:
@@ -22,7 +23,12 @@ class ContextWindow:
                  compaction_floor: float = DEFAULT_COMPACTION_FLOOR):
         self.messages: list[ChatMessage] = []
         self.file_contexts: list[FileContext] = []
+        # `knowledge_ledger` is the rendered text every reader consumes (system
+        # prompt, is_cold, stats). `ledger_facts` is the provenance-carrying source
+        # of truth (FUTURE_DIRECTIONS §6): when populated it DERIVES the text; when
+        # empty the text stands alone (legacy snapshots / direct assignment).
         self.knowledge_ledger: str = ""
+        self.ledger_facts: list[LedgerFact] = []
         self.max_context_tokens = max_context_tokens
         self.fill_threshold = fill_threshold       # high watermark: compaction TRIGGER
         self.compaction_floor = compaction_floor   # low watermark: compact DOWN to this
@@ -56,6 +62,7 @@ class ContextWindow:
         c.messages = copy.deepcopy(self.messages)
         c.file_contexts = copy.deepcopy(self.file_contexts)
         c.knowledge_ledger = self.knowledge_ledger
+        c.ledger_facts = copy.deepcopy(self.ledger_facts)
         return c
 
     def exploration_score(self) -> tuple[int, int]:
@@ -120,23 +127,29 @@ class ContextWindow:
         return False
 
     def invalidate_file_context(self, path: str) -> bool:
+        found = False
         for fc in self.file_contexts:
             if fc.path == path:
                 fc.content_hash = ""  # "" → stale → re-read / dropped on next validate
                 fc.content = ""       # teed bytes no longer match disk → drop them
-                return True
-        return False
+                found = True
+                break
+        self.mark_ledger_stale(path)  # demote ledger facts distilled from this file
+        return found
 
     def mark_file_deleted(self, path: str) -> bool:
         """Flag a read file as GONE from this path (deleted, or moved/renamed
         away). Distinct from stale: there's nothing to re-read here."""
+        found = False
         for fc in self.file_contexts:
             if fc.path == path:
                 fc.content_hash = ""
                 fc.content = ""
                 fc.deleted = True
-                return True
-        return False
+                found = True
+                break
+        self.mark_ledger_stale(path)  # demote ledger facts distilled from this file
+        return found
 
     def remove_file_context(self, path: str) -> None:
         self.file_contexts = [fc for fc in self.file_contexts if fc.path != path]
@@ -156,6 +169,63 @@ class ContextWindow:
         if any(fc.has_content for fc in self.file_contexts):
             return False
         return len(self.knowledge_ledger.strip()) < min_ledger_chars
+
+    # ── knowledge ledger (provenance-tagged; FUTURE_DIRECTIONS §6) ──
+    def manifest_hashes(self) -> dict[str, str]:
+        """The current, checkable file→hash map used to attribute ledger facts:
+        live (non-deleted) manifest entries with a known content hash."""
+        return {fc.path: fc.content_hash for fc in self.file_contexts
+                if fc.content_hash and not fc.deleted}
+
+    def set_ledger_from_summary(self, text: str, manifest: dict[str, str] | None = None) -> None:
+        """Adopt a fresh summarizer output as the ledger, splitting it into per-line
+        facts and mechanically attributing each to the manifest paths it mentions
+        (their current hash). Replaces prior facts (the summary already merged them)
+        and re-renders `knowledge_ledger`."""
+        if manifest is None:
+            manifest = self.manifest_hashes()
+        facts: list[LedgerFact] = []
+        for line in text.splitlines():
+            s = line.strip()
+            if not s:
+                continue
+            sources = {p: h for p, h in manifest.items() if p in s}
+            facts.append(LedgerFact(text=s, sources=sources))
+        self.ledger_facts = facts
+        self.knowledge_ledger = self._render_ledger()
+
+    def ledger_for_summary(self) -> str:
+        """The plain existing-ledger text fed back into the summarizer: all facts'
+        text (stale included, so their content can be re-merged) WITHOUT the demotion
+        heading (which is presentation, not a durable fact)."""
+        if self.ledger_facts:
+            return "\n".join(f.text for f in self.ledger_facts)
+        return self.knowledge_ledger
+
+    def _render_ledger(self) -> str:
+        """Rendered ledger: fresh facts first, then any demoted (stale) facts under
+        the warning heading so the model treats them as re-verify-before-trust."""
+        fresh = [f.text for f in self.ledger_facts if not f.stale]
+        stale = [f.text for f in self.ledger_facts if f.stale]
+        parts: list[str] = []
+        if fresh:
+            parts.append("\n".join(fresh))
+        if stale:
+            parts.append(STALE_LEDGER_HEADING + "\n" + "\n".join(stale))
+        return "\n\n".join(parts)
+
+    def mark_ledger_stale(self, path: str) -> bool:
+        """Demote every fact citing `path` (an out-of-band change was detected) and
+        re-render. No-op — and never clobbers a directly-set ledger — when there are
+        no provenance-tagged facts."""
+        changed = False
+        for f in self.ledger_facts:
+            if not f.stale and path in f.sources:
+                f.stale = True
+                changed = True
+        if changed:
+            self.knowledge_ledger = self._render_ledger()
+        return changed
 
     # ── messages ──
     def append_message(self, m: ChatMessage) -> None:
@@ -191,12 +261,18 @@ class ContextWindow:
         return n
 
     # ── restore / clear ──
-    def restore(self, messages: list[ChatMessage], file_contexts: list[FileContext], ledger: str) -> None:
+    def restore(self, messages: list[ChatMessage], file_contexts: list[FileContext],
+                ledger: str, ledger_facts: list[LedgerFact] | None = None) -> None:
         self.messages = list(messages)
         self.file_contexts = list(file_contexts)
-        self.knowledge_ledger = ledger
+        self.ledger_facts = list(ledger_facts or [])
+        # If provenance facts were restored, the rendered text derives from them
+        # (they may carry cross-session staleness the validator flagged on load);
+        # otherwise fall back to the stored text (legacy snapshots).
+        self.knowledge_ledger = self._render_ledger() if self.ledger_facts else ledger
 
     def clear(self) -> None:
         self.messages.clear()
         self.file_contexts.clear()
         self.knowledge_ledger = ""
+        self.ledger_facts.clear()

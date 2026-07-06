@@ -108,8 +108,8 @@ async def _distill_observations(ws: "WorkspaceState", window: "ContextWindow", t
     if not pending:
         return
     observed = [ChatMessage(role="user", content=f"[Observed file: {p}]\n{c}") for p, c in pending]
-    new_ledger, cost = await ws.summarizer.summarize(window.knowledge_ledger, observed)
-    window.knowledge_ledger = new_ledger
+    new_ledger, cost = await ws.summarizer.summarize(window.ledger_for_summary(), observed)
+    window.set_ledger_from_summary(new_ledger)
     ws.add_cost(cost)
     ws.last_compaction = now_ms()
     ws.summaries_written += 1
@@ -160,8 +160,8 @@ async def _maybe_compact(ws: "WorkspaceState", window: "ContextWindow") -> None:
             break
         dropped.extend(pair)
     if dropped:
-        new_ledger, cost = await ws.summarizer.summarize(window.knowledge_ledger, dropped)
-        window.knowledge_ledger = new_ledger
+        new_ledger, cost = await ws.summarizer.summarize(window.ledger_for_summary(), dropped)
+        window.set_ledger_from_summary(new_ledger)
         ws.add_cost(cost)
         ws.last_compaction = now_ms()
         ws.summaries_written += 1
