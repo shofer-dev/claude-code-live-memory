@@ -248,7 +248,18 @@ per-session premium tokens? A/B cold sessions with vs. without the injected core
 understanding-bound task — the net is (premium exploration saved) − (core-map tokens spent each
 session). Depends entirely on keeping the map small and only pushing it when it pays.
 
-## 6. Ledger freshness (provenance-tagged compaction)
+## 6. Ledger freshness (provenance-tagged compaction) — ✅ IMPLEMENTED (core)
+
+> **Shipped.** `LedgerFact` (`models.py`) carries `sources: {path → content_hash}`;
+> `ContextWindow.ledger_facts` is the source of truth and renders the `knowledge_ledger`
+> text readers already consume. A cited file changing **in-session** (`invalidate_file_context` /
+> `mark_file_deleted` → `mark_ledger_stale`) or **cross-session** (`conversation_store` re-hashes
+> each fact's sources against disk on load) demotes citing facts under `STALE_LEDGER_HEADING`.
+> Attribution is per-line/path-mention (each fact cites the manifest paths its text names → small
+> source sets); the summarizer is fed the plain fact text (`ledger_for_summary`, heading stripped).
+> **Remaining future:** background *re-derivation* of demoted facts (today they're flagged, not
+> auto-refreshed); optional model-attribution to narrow source sets; subsumption by the §2 store.
+> The rationale below records the design.
 
 **The gap — asymmetric staleness across the two tiers.** Live Memory keeps two kinds of memory and
 handles their staleness very differently. **Raw file contexts** are a hash-pinned manifest
