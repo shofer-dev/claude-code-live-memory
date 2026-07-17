@@ -166,9 +166,13 @@ live-memory/
 - **Append-only window between compactions**; compaction = **batched neutral
   summarization** with a high/low-watermark (rare, batched) — observed files + Q&A
   distilled into a query-agnostic knowledge ledger — never front-truncation.
-- **Two-tier timeout**: `ask_live_memory(question, cwd, timeout)` — the soft
-  `timeout` informs the model's budget and yields a best-effort answer before the
-  hard `.mcp.json` MCP timeout.
+- **Two-tier timeout**: `ask_live_memory(question, cwd, timeout, max_answer_tokens?)`
+  — the soft `timeout` informs the model's budget and yields a best-effort answer
+  before the hard `.mcp.json` MCP timeout.
+- **Disclosed answer-length budget**: the answer is hard-capped (default
+  `LIVE_MEMORY_MAX_ANSWER_TOKENS`) *and* the model is told the cap, so it
+  self-regulates instead of being truncated mid-sentence; the optional
+  `max_answer_tokens` arg overrides it per question.
 - **Human status** via the `/live-memory-stats` slash command (→ `/stats`), kept
   off the agent's tool surface.
 

@@ -72,7 +72,7 @@ def _build_system(ws: "WorkspaceState", window: "ContextWindow") -> tuple[str, s
     return stable, "\n\n".join(sections)
 
 
-def _build_hints(recently_modified: list[str], remaining_s: float) -> str:
+def _build_hints(recently_modified: list[str], remaining_s: float, max_answer_tokens: int) -> str:
     parts: list[str] = []
     if recently_modified:
         parts.append(
@@ -84,6 +84,16 @@ def _build_hints(recently_modified: list[str], remaining_s: float) -> str:
         f"[Soft budget for this question (advisory, not enforced): aim to answer within "
         f"~{remaining_s:.0f}s of wall time, using fewer tool round-trips when possible, and keep the "
         f"answer concise. If the question genuinely requires more, exceed it rather than answer wrongly.]"
+    )
+    # Answer-length budget is ENFORCED (a hard max_tokens cap), so disclose it: the model
+    # self-regulates — fitting the most important facts first and summarizing rather than
+    # overrunning — instead of being silently cut off mid-sentence at the cap.
+    parts.append(
+        f"[Answer-length budget for this question (ENFORCED, hard cap): your final answer must fit "
+        f"within ~{max_answer_tokens} output tokens (~{max_answer_tokens * 4} characters). This is a "
+        f"hard limit — anything beyond it is cut off mid-sentence and lost. Lead with the most "
+        f"important facts and keep within budget; if the full answer genuinely cannot fit, say so and "
+        f"give a prioritized summary rather than running into the cap.]"
     )
     return "\n\n".join(parts)
 
@@ -191,9 +201,12 @@ def _track_file_read(ws: "WorkspaceState", window: "ContextWindow", args_json: s
         pass
 
 
-async def process_question(ws: "WorkspaceState", question: str, deadline: float) -> QuestionResult:
+async def process_question(ws: "WorkspaceState", question: str, deadline: float,
+                           max_answer_tokens: int | None = None) -> QuestionResult:
     loop = asyncio.get_running_loop()
     start = time.time()
+    # None → fall back to the workspace's configured default (env > config.json > constant).
+    answer_tokens = ws.cfg.default_max_answer_tokens if max_answer_tokens is None else max_answer_tokens
 
     # Take the window this question runs against — a fork (parallel) or the live
     # window (serial) — atomically with draining the change-notification hints.
@@ -204,7 +217,7 @@ async def process_question(ws: "WorkspaceState", question: str, deadline: float)
     await _maybe_compact(ws, window)
     system_stable, system_volatile = _build_system(ws, window)
     conversation = _history_to_messages(window.messages)
-    hints = _build_hints(recently, max(0.0, deadline - loop.time()))
+    hints = _build_hints(recently, max(0.0, deadline - loop.time()), answer_tokens)
     conversation.append({"role": "user", "content": f"{question}\n\n{hints}" if hints else question})
 
     answer = ""
@@ -221,7 +234,8 @@ async def process_question(ws: "WorkspaceState", question: str, deadline: float)
                 answer = "(I reached the time budget before producing a final answer. Ask again with a larger timeout or a narrower question.)"
             break
 
-        result = await ws.llm.chat(system_stable, conversation, tools=TOOL_SCHEMAS, system_volatile=system_volatile)
+        result = await ws.llm.chat(system_stable, conversation, tools=TOOL_SCHEMAS,
+                                   max_tokens=answer_tokens, system_volatile=system_volatile)
         prompt_tok += result.prompt_tokens
         completion_tok += result.completion_tokens
         cost.add(result.cost)

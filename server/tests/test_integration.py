@@ -131,8 +131,10 @@ async def test_mcp_round_trip_and_async_and_keepwarm(server):
             assert "ask_live_memory" in names
             assert "ask_live_memory_submit" in names and "ask_live_memory_result" in names  # async on
 
-            # sync round-trip: real transport → server → mock LLM → answer + metadata trailer
-            res = await s.call_tool("ask_live_memory", {"question": "hi", "cwd": cwd, "timeout": 30})
+            # sync round-trip: real transport → server → mock LLM → answer + metadata trailer.
+            # Also passes the optional max_answer_tokens to exercise the new tool arg end-to-end.
+            res = await s.call_tool("ask_live_memory", {"question": "hi", "cwd": cwd, "timeout": 30,
+                                                        "max_answer_tokens": 512})
             text = res.content[0].text
             assert "MOCK ANSWER" in text
             assert "[live-memory]" in text and "model=test-model" in text

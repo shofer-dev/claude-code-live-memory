@@ -39,6 +39,12 @@ Call the `ask_live_memory` MCP tool with:
 - `timeout` (required) — seconds you are willing to wait. The Live Memory is told
   this budget and returns its best answer by the deadline; pick a value that fits
   your latency tolerance (e.g. 30–120s for a normal lookup).
+- `max_answer_tokens` (optional) — a hard cap on the answer length, in output
+  tokens (~4 characters each). The Live Memory is told this budget and keeps its
+  answer within it; beyond the cap the answer is truncated. Omit it (or pass 0)
+  for the default, which suits normal lookups. Raise it when you deliberately
+  want a long, detailed answer (e.g. "walk me through the whole request flow");
+  lower it to force a terse one.
 
 Ask **one focused question per call**. The answer string is what you get back —
 the Live Memory's own working context is private and does not enter yours.

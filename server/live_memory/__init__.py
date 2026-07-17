@@ -3,4 +3,4 @@
 A standalone Claude Code plugin: an HTTP-transport MCP server that accumulates
 codebase knowledge across sessions. See ../../DESIGN.md.
 """
-__version__ = "0.4.3"
+__version__ = "0.6.0"

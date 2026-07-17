@@ -161,6 +161,10 @@ class Config:
     max_iterations: int = field(default_factory=lambda: int(os.environ.get("LIVE_MEMORY_MAX_ITERATIONS", str(k.DEFAULT_MAX_ITERATIONS))))
     max_queue_size: int = field(default_factory=lambda: int(os.environ.get("LIVE_MEMORY_MAX_QUEUE_SIZE", str(k.DEFAULT_MAX_QUEUE_SIZE))))
     default_timeout_s: float = field(default_factory=lambda: float(os.environ.get("LIVE_MEMORY_DEFAULT_TIMEOUT_S", str(k.DEFAULT_TIMEOUT_S))))
+    # Hard cap on the tokens the model may generate per turn — bounds the final answer
+    # (see constants.DEFAULT_MAX_ANSWER_TOKENS). Server default; the tool's
+    # `max_answer_tokens` arg overrides it per question (clamped MIN/MAX_ANSWER_TOKENS).
+    default_max_answer_tokens: int = field(default_factory=lambda: int(os.environ.get("LIVE_MEMORY_MAX_ANSWER_TOKENS", str(k.DEFAULT_MAX_ANSWER_TOKENS))))
     # Same-workspace concurrency: "parallel" (default — fork the window per
     # question, run up to max_parallel_queries at once, commit back the fork that
     # explored the most, no queue delay) or "serial" (one question at a time, the

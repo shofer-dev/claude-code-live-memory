@@ -23,7 +23,12 @@ from starlette.responses import JSONResponse
 
 from .async_jobs import JobRunner
 from .config import Config, is_absolute_cwd
-from .constants import MAX_QUESTION_TIMEOUT_S, MIN_QUESTION_TIMEOUT_S
+from .constants import (
+    MAX_ANSWER_TOKENS,
+    MAX_QUESTION_TIMEOUT_S,
+    MIN_ANSWER_TOKENS,
+    MIN_QUESTION_TIMEOUT_S,
+)
 from .keep_warm import keep_warm_loop
 from .llm_client import LlmClient, make_client
 from .manager import process_question
@@ -92,7 +97,13 @@ def build_server(cfg: Config | None = None) -> FastMCP:
     def _clamp_timeout(timeout: float) -> float:
         return max(MIN_QUESTION_TIMEOUT_S, min(float(timeout) if timeout else registry.cfg.default_timeout_s, MAX_QUESTION_TIMEOUT_S))
 
-    async def _answer(question: str, cwd: str, timeout_s: float) -> str:
+    def _clamp_answer_tokens(max_answer_tokens: int) -> int:
+        """Resolve the tool's `max_answer_tokens` arg: 0/absent → the server default;
+        otherwise clamp to [MIN, MAX]_ANSWER_TOKENS."""
+        n = int(max_answer_tokens) if max_answer_tokens else registry.cfg.default_max_answer_tokens
+        return max(MIN_ANSWER_TOKENS, min(n, MAX_ANSWER_TOKENS))
+
+    async def _answer(question: str, cwd: str, timeout_s: float, answer_tokens: int) -> str:
         """Run one question through the workspace queue and render answer + metadata.
         Raises QueueFull/QuestionTimeout/Exception — the caller decides how to report."""
         _ensure_keep_warm()  # idempotent; starts the warm loop on the first query
@@ -100,14 +111,14 @@ def build_server(cfg: Config | None = None) -> FastMCP:
         ws.invocations += 1  # count every well-formed call (answered or not), before processing
 
         async def proc(q: str, c: str, deadline: float) -> QuestionResult:
-            return await process_question(ws, q, deadline)
+            return await process_question(ws, q, deadline, answer_tokens)
 
         result = await ws.queue.submit(question, cwd, timeout_s, proc)
         answer = f"[partial — soft timeout reached]\n{result.answer}" if result.timed_out else result.answer
         return f"{answer}\n\n{_format_metadata(result, ws)}"
 
     @mcp.tool()
-    async def ask_live_memory(question: str, cwd: str, timeout: float) -> str:
+    async def ask_live_memory(question: str, cwd: str, timeout: float, max_answer_tokens: int = 0) -> str:
         """Ask the Live Memory about the codebase at `cwd`.
 
         The Live Memory is a persistent, read-only companion that accumulates
@@ -129,12 +140,19 @@ def build_server(cfg: Config | None = None) -> FastMCP:
                 same project share one accumulating memory.
             timeout: Seconds you are willing to wait; the Live Memory is told
                 this budget and returns its best answer by the deadline.
+            max_answer_tokens: Optional hard cap on the length of the answer, in
+                output tokens (~4 characters each). The Live Memory is told this
+                budget and keeps its answer within it — beyond the cap the answer
+                is truncated. Raise it for a question that needs a long, detailed
+                answer; lower it to force a terse one. 0 or omitted uses the
+                server default (a few thousand tokens); the value is clamped to a
+                sane range.
         """
         err = _validate(question, cwd)
         if err:
             return err
         try:
-            return await _answer(question, cwd, _clamp_timeout(timeout))
+            return await _answer(question, cwd, _clamp_timeout(timeout), _clamp_answer_tokens(max_answer_tokens))
         except (QueueFull, QuestionTimeout) as e:
             return f"Error: {e}"
         except Exception as e:  # noqa: BLE001
@@ -238,7 +256,7 @@ def build_server(cfg: Config | None = None) -> FastMCP:
         jobs = JobRunner()
 
         @mcp.tool()
-        async def ask_live_memory_submit(question: str, cwd: str, timeout: float) -> str:
+        async def ask_live_memory_submit(question: str, cwd: str, timeout: float, max_answer_tokens: int = 0) -> str:
             """Submit a Live Memory question to run in the BACKGROUND and return a
             job_id immediately — use this instead of ask_live_memory when the query
             may be slow and you want to keep working, then collect the answer later.
@@ -246,13 +264,14 @@ def build_server(cfg: Config | None = None) -> FastMCP:
             Returns a job_id. Do other work, then call ask_live_memory_result with
             that job_id to fetch the answer (it reports "[running]" until ready).
             Same answer quality as ask_live_memory; same args (see that tool for
-            `cwd` rules — absolute repo root).
+            `cwd` rules — absolute repo root — and `max_answer_tokens`).
             """
             err = _validate(question, cwd)
             if err:
                 return err
             ts = _clamp_timeout(timeout)
-            job_id = jobs.submit(lambda: _answer(question, cwd, ts))
+            at = _clamp_answer_tokens(max_answer_tokens)
+            job_id = jobs.submit(lambda: _answer(question, cwd, ts, at))
             return (f'Submitted as job "{job_id}". Continue with other work, then call '
                     f'ask_live_memory_result(job_id="{job_id}") to collect the answer.')
 

@@ -38,6 +38,13 @@ DEFAULT_MAX_ITERATIONS = 25                # LIVE_MEMORY_MAX_ITERATIONS
 DEFAULT_TIMEOUT_S = 90.0                   # soft per-question budget (LIVE_MEMORY_DEFAULT_TIMEOUT_S)
 MIN_QUESTION_TIMEOUT_S = 5.0               # clamp floor for the tool's `timeout` arg
 MAX_QUESTION_TIMEOUT_S = 1800.0            # clamp ceiling for the tool's `timeout` arg
+# Answer-length cap: the hard `max_tokens` ceiling on the model's generated answer
+# (a per-turn output limit that also bounds the final answer). It is both enforced
+# and DISCLOSED — the agent is told its budget so it self-regulates instead of being
+# truncated mid-sentence — and the caller may override it per question.
+DEFAULT_MAX_ANSWER_TOKENS = 4096           # LIVE_MEMORY_MAX_ANSWER_TOKENS; also the tool's max_answer_tokens default
+MIN_ANSWER_TOKENS = 256                    # clamp floor for the tool's `max_answer_tokens` arg
+MAX_ANSWER_TOKENS = 32_000                 # clamp ceiling for the tool's `max_answer_tokens` arg
 
 # ── queue / concurrency ──
 DEFAULT_MAX_QUEUE_SIZE = 100               # LIVE_MEMORY_MAX_QUEUE_SIZE

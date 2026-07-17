@@ -27,9 +27,18 @@ class FakeLlm:
         self.delay = delay
         self.chat_calls = 0
         self.complete_calls = 0
+        self.max_tokens_seen: list[int] = []  # max_tokens passed to each chat() call
+        self.first_user_content = ""          # content of the first user turn (carries the per-question hints)
 
     async def chat(self, system_prompt: str, messages: list[dict], tools=None, max_tokens: int = 4096, system_volatile: str = "") -> ChatResult:
         self.chat_calls += 1
+        self.max_tokens_seen.append(max_tokens)
+        if not self.first_user_content:
+            for m in messages:
+                c = m.get("content")
+                if m.get("role") == "user" and isinstance(c, str):
+                    self.first_user_content = c
+                    break
         if self.delay:
             await asyncio.sleep(self.delay)
         return self.scripts.pop(0) if self.scripts else ChatResult(answer="(out of script)")

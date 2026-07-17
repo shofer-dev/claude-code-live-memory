@@ -1,6 +1,6 @@
 [project]
 name = "shofer-live-memory"
-version = "0.5.0"
+version = "0.6.0"
 description = "A cheap, persistent, read-only codebase memory for Claude Code — a large-context model that accumulates repo knowledge across sessions and answers via ask_live_memory instead of re-reading files."
 readme = "README.md"
 requires-python = ">=3.10"

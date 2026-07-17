@@ -103,6 +103,33 @@ async def test_metadata_zero_when_no_tools(tmp_cfg):
     assert r.tool_calls == 0 and r.files_read == 0
 
 
+@pytest.mark.asyncio
+async def test_answer_budget_defaults_from_config(tmp_cfg):
+    # No explicit max_answer_tokens → the workspace's configured default is passed to chat()
+    # and disclosed to the model in the per-question hints so it self-regulates.
+    tmp_cfg.default_max_answer_tokens = 1234
+    llm = FakeLlm([ChatResult(answer="ok")])
+    ws = make_ws(tmp_cfg, llm)
+    await process_question(ws, "q", far_deadline())
+    assert llm.max_tokens_seen and all(n == 1234 for n in llm.max_tokens_seen)
+    assert "1234" in llm.first_user_content and "ENFORCED" in llm.first_user_content
+
+
+@pytest.mark.asyncio
+async def test_answer_budget_override_threads_through(tmp_cfg):
+    # An explicit per-question override wins over the config default, on both the wire
+    # (chat max_tokens) and the disclosed hint.
+    tmp_cfg.default_max_answer_tokens = 4096
+    llm = FakeLlm([
+        ChatResult(tool_calls=[ToolCall("t1", "Grep", '{"pattern": "x"}')]),
+        ChatResult(answer="done"),
+    ])
+    ws = make_ws(tmp_cfg, llm)
+    await process_question(ws, "q", far_deadline(), max_answer_tokens=800)
+    assert llm.max_tokens_seen == [800, 800]  # every turn in the loop honors the cap
+    assert "800" in llm.first_user_content
+
+
 def test_stats_exposes_token_breakdown(tmp_cfg):
     # cumulative input/output tokens surface in /stats (needed for benchmarking,
     # and they accumulate even under subscription where costUsd is null/zeroed).
